@@ -1,28 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:mad_location_tracker/map.dart';
 
-void main() {
-  runApp(const MyApp());
-}
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MapScreen extends StatelessWidget {
+  const MapScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LocationTracker - Home',
+      title: 'LocationTracker - Map',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.yellow),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'LocationTracker'),
+      home: const MapView(title: 'LocationTracker'),
     );
   }
 }
 
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key, required this.title});
+class MapView extends StatelessWidget {
+  const MapView({super.key, required this.title});
 
   final String title;
 
@@ -40,20 +36,10 @@ class MyHomePage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text(
-              'List main view',
+              'map view',
             )
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const MapScreen()),
-          )
-        },
-        tooltip: 'Add a new activity',
-        label: const Row(children: [Icon(Icons.add), Text('Activity')]),
       ),
     );
   }
