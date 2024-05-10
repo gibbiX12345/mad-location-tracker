@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_config/flutter_config.dart';
 import 'package:mad_location_tracker/app_bar.dart';
 import 'package:mad_location_tracker/map.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized(); // Required by FlutterConfig
+  await FlutterConfig.loadEnvVariables();
   runApp(const MyApp());
 }
 
@@ -31,13 +35,18 @@ class ListView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: getAppBar(context),
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Text(
+            const Text(
               'List main view',
-            )
+            ),
+            ElevatedButton(
+                onPressed: () {
+                  _askForLocationPermissions(context: context);
+                },
+                child: const Text("Ask for Location Permissions"))
           ],
         ),
       ),
@@ -52,5 +61,28 @@ class ListView extends StatelessWidget {
         label: const Row(children: [Icon(Icons.add), Text('Activity')]),
       ),
     );
+  }
+
+  _askForLocationPermissions({required BuildContext context}) async {
+    String message;
+    Duration duration;
+    if (await Permission.locationWhenInUse.shouldShowRequestRationale) {
+      message = "You've already denied Location Access...";
+      duration = const Duration(seconds: 2);
+    } else {
+      var status = await Permission.locationWhenInUse.request();
+      message = status.isGranted
+          ? "Location Access granted"
+          : "Location Access denied";
+      duration = const Duration(seconds: 1);
+    }
+
+    if (context.mounted) {
+      var snackBar = SnackBar(
+        content: Text(message),
+        duration: duration,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
   }
 }
