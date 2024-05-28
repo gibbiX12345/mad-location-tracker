@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "49825280912",
+    "project_id": "mad-location-tracker",
+    "storage_bucket": "mad-location-tracker.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:49825280912:android:e2200242d704008f5d7915",
+        "android_client_info": {
+          "package_name": "com.example.mad_location_tracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "49825280912-3fdlo3oga8p3egrovrc5tctha5f1pc1b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mad_location_tracker",
+            "certificate_hash": "f4b0d7764c516cff0c77d4ca7cbcb1838412e642"
+          }
+        },
+        {
+          "client_id": "49825280912-3jjulnit5o2vt1a1npk558e6toobgcu4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmmH6qOkwuZt44mrlln4PgjaPzmNH9zRo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "49825280912-3jjulnit5o2vt1a1npk558e6toobgcu4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "49825280912-ikbrlnnkf5hlfsnvp1i7rp0vjoahr27p.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.madLocationTracker"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
