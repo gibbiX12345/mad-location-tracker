@@ -120,12 +120,34 @@ class MapSampleState extends State<MapSample> {
   }
 
   _getLocations() async {
+    var currentActivity = await _getCurrentActivity();
     var snapshot = await db
         .collection("locations")
         .where("userUid",
             isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
+        .where("activityUid",
+            isEqualTo: "$currentActivity")
         .get();
 
     return snapshot.docs.map((doc) => doc.data()).toList();
+  }
+
+  
+
+  _getCurrentActivity() async {
+    var db = FirebaseFirestore.instance;
+    var snapshot = await db
+        .collection("activities")
+        .where("userUid",
+            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
+        .where("isActive", isEqualTo: true)
+        .get();
+
+    var activities = snapshot.docs;
+    if (activities.isNotEmpty) {
+      return activities.first.id;
+    } else {
+      return "";
+    }
   }
 }

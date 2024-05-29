@@ -75,15 +75,29 @@ class ListView extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const MapView()),
-          )
-        },
+        onPressed: () => {_startNewActivity(context)},
         tooltip: 'Add a new activity',
         label: const Row(children: [Icon(Icons.add), Text('Activity')]),
       ),
+    );
+  }
+
+  _startNewActivity(BuildContext context) async {
+    var currentActivity = await _getCurrentActivity();
+    if (currentActivity == "") {
+      var db = FirebaseFirestore.instance;
+      var activityMap = <String, dynamic>{
+        "name": "My Activity",
+        "isActive": true,
+        "time": DateTime.now().toString(),
+        "userUid": FirebaseAuth.instance.currentUser?.uid
+      };
+      db.collection("activities").add(activityMap);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MapView()),
     );
   }
 
@@ -198,8 +212,9 @@ class ListView extends StatelessWidget {
     BackgroundLocation.stopLocationService();
   }
 
-  _saveNewLocation(Location location) {
+  _saveNewLocation(Location location) async {
     var db = FirebaseFirestore.instance;
+    var currentActivity = await _getCurrentActivity();
     var locationMap = <String, dynamic>{
       "latitude": location.latitude.toString(),
       "longitude": location.longitude.toString(),
@@ -209,8 +224,26 @@ class ListView extends StatelessWidget {
       "speed": location.speed.toString(),
       "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
           .toString(),
-      "userUid": FirebaseAuth.instance.currentUser?.uid
+      "userUid": FirebaseAuth.instance.currentUser?.uid,
+      "activityUid": currentActivity
     };
     db.collection("locations").add(locationMap);
+  }
+
+  _getCurrentActivity() async {
+    var db = FirebaseFirestore.instance;
+    var snapshot = await db
+        .collection("activities")
+        .where("userUid",
+            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
+        .where("isActive", isEqualTo: true)
+        .get();
+
+    var activities = snapshot.docs;
+    if (activities.isNotEmpty) {
+      return activities.first.id;
+    } else {
+      return "";
+    }
   }
 }
