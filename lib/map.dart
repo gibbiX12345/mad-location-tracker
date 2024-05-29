@@ -23,19 +23,24 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
-  static late GoogleMapController _controller;
+  static late Completer<GoogleMapController> _controllerCompleter;
+  late GoogleMapController _controller;
   Timer? _timer;
   final FirebaseFirestore db = FirebaseFirestore.instance;
   Set<Marker> _markers = {};
 
   @override
   void initState() {
+    _controllerCompleter = Completer<GoogleMapController>();
     _fetchLocations();
     super.initState();
   }
 
   Future<void> _fetchLocations() async {
     var locations = await _getLocations();
+    if (!_controllerCompleter.isCompleted) {
+      _controller = await _controllerCompleter.future;
+    }
     setState(() {
       _markers = Set.from(locations.map((entry) => Marker(
             markerId: MarkerId(entry['time']),
@@ -43,12 +48,12 @@ class MapSampleState extends State<MapSample> {
             position: LatLng(double.parse(entry['latitude']),
                 double.parse(entry['longitude'])),
           )));
-
       _setInitialCameraPosition(_controller);
     });
-    _timer = Timer.periodic(const Duration(seconds: 15), (Timer t) => _fetchLocations());
+    _timer = Timer.periodic(
+        const Duration(seconds: 15), (Timer t) => _fetchLocations());
   }
-  
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -68,6 +73,9 @@ class MapSampleState extends State<MapSample> {
               zoom: 10,
             ),
             onMapCreated: (controller) {
+              if (!_controllerCompleter.isCompleted) {
+                _controllerCompleter.complete(controller);
+              }
               _controller = controller;
             },
             markers: _markers,
