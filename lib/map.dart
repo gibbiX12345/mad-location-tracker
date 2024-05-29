@@ -23,8 +23,8 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
- static late GoogleMapController _controller;
-
+  static late GoogleMapController _controller;
+  Timer? _timer;
   final FirebaseFirestore db = FirebaseFirestore.instance;
   Set<Marker> _markers = {};
 
@@ -43,10 +43,16 @@ class MapSampleState extends State<MapSample> {
             position: LatLng(double.parse(entry['latitude']),
                 double.parse(entry['longitude'])),
           )));
-          
+
       _setInitialCameraPosition(_controller);
     });
-    Timer.periodic(const Duration(seconds: 15), (Timer t) => _fetchLocations());
+    _timer = Timer.periodic(const Duration(seconds: 15), (Timer t) => _fetchLocations());
+  }
+  
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override
