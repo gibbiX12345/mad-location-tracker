@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mad_location_tracker/app_bar.dart';
@@ -21,67 +23,95 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
-  final _controller = Completer<GoogleMapController>();
-  var _pos = 0;
+ static late GoogleMapController _controller;
 
-  static const _positions = {
-    "Informaticon": LatLng(46.7559, 7.6149),
-    "Bahnhof": LatLng(46.7548, 7.6297),
-    "Schloss": LatLng(46.7598, 7.6299),
-  };
-  static final Set<Marker> _markers =
-  Set.from(_positions.entries.map((entry) =>
-      Marker(
-        markerId: MarkerId(entry.key),
-        infoWindow: InfoWindow(title: entry.key),
-        position: entry.value,
-      )));
+  final FirebaseFirestore db = FirebaseFirestore.instance;
+  Set<Marker> _markers = {};
+
+  @override
+  void initState() {
+    _fetchLocations();
+    super.initState();
+  }
+
+  Future<void> _fetchLocations() async {
+    var locations = await _getLocations();
+    setState(() {
+      _markers = Set.from(locations.map((entry) => Marker(
+            markerId: MarkerId(entry['time']),
+            infoWindow: InfoWindow(title: entry['time']),
+            position: LatLng(double.parse(entry['latitude']),
+                double.parse(entry['longitude'])),
+          )));
+          
+      _setInitialCameraPosition(_controller);
+    });
+    Timer.periodic(const Duration(seconds: 15), (Timer t) => _fetchLocations());
+  }
 
   @override
   Widget build(BuildContext context) {
-    var firstPosition = _positions.values.first;
-
     return Scaffold(
       appBar: getAppBar(context),
       body: Stack(
         children: [
           GoogleMap(
             mapType: MapType.hybrid,
-            initialCameraPosition: CameraPosition(
-              target: firstPosition,
-              zoom: 19,
+            initialCameraPosition: const CameraPosition(
+              target: (LatLng(46.9577191, 7.4556732)),
+              zoom: 10,
             ),
             onMapCreated: (controller) {
-              _controller.complete(controller);
+              _controller = controller;
             },
             markers: _markers,
             compassEnabled: true,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: ElevatedButton(
-                onPressed: _nextPos,
-                child: const Text("Next"),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  _nextPos() async {
-    _pos += 1;
-    var next = CameraPosition(
-      target: List.from(_positions.values)[_pos % _positions.length]!,
-      zoom: 20,
-    );
+  void _setInitialCameraPosition(GoogleMapController controller) {
+    if (_markers.isNotEmpty) {
+      LatLngBounds bounds = calculateBounds(_markers);
+      moveCameraToFitBounds(controller, bounds);
+    }
+  }
 
-    final controller = await _controller.future;
-    await controller.animateCamera(CameraUpdate.newCameraPosition(next));
+  LatLngBounds calculateBounds(Set<Marker> markers) {
+    double southWestLat =
+        markers.map((m) => m.position.latitude).reduce((a, b) => a < b ? a : b);
+    double southWestLng = markers
+        .map((m) => m.position.longitude)
+        .reduce((a, b) => a < b ? a : b);
+    double northEastLat =
+        markers.map((m) => m.position.latitude).reduce((a, b) => a > b ? a : b);
+    double northEastLng = markers
+        .map((m) => m.position.longitude)
+        .reduce((a, b) => a > b ? a : b);
+
+    return LatLngBounds(
+      southwest: LatLng(southWestLat, southWestLng),
+      northeast: LatLng(northEastLat, northEastLng),
+    );
+  }
+
+  void moveCameraToFitBounds(
+      GoogleMapController controller, LatLngBounds bounds) {
+    controller.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, 50)); // 50 is padding
+  }
+
+  _getLocations() async {
+    var snapshot = await db
+        .collection("locations")
+        .where("userUid",
+            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data()).toList();
   }
 }
