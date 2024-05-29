@@ -1,4 +1,5 @@
 import 'package:background_location/background_location.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -113,7 +114,7 @@ class ListView extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
   }
-  
+
   _requestNotificationPermission({required BuildContext context}) async {
     String message;
     Duration duration;
@@ -186,37 +187,30 @@ class ListView extends StatelessWidget {
       icon: '@mipmap/ic_launcher',
     );
     await BackgroundLocation.setAndroidConfiguration(30000);
+    await BackgroundLocation.stopLocationService();
     await BackgroundLocation.startLocationService(distanceFilter: 0);
     BackgroundLocation.getLocationUpdates((location) {
-      var latitude = location.latitude.toString();
-      var longitude = location.longitude.toString();
-      var accuracy = location.accuracy.toString();
-      var altitude = location.altitude.toString();
-      var bearing = location.bearing.toString();
-      var speed = location.speed.toString();
-      var time = DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
-          .toString();
-
-      var message = '''\n
-                        Latitude:  $latitude
-                        Longitude: $longitude
-                        Altitude: $altitude
-                        Accuracy: $accuracy
-                        Bearing:  $bearing
-                        Speed: $speed
-                        Time: $time
-                      ''';
-      if (context.mounted) {
-        var snackBar = SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 1),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(snackBar);
-      }
+      _saveNewLocation(location);
     });
   }
 
   _stopLocationService({required BuildContext context}) async {
     BackgroundLocation.stopLocationService();
+  }
+
+  _saveNewLocation(Location location) {
+    var db = FirebaseFirestore.instance;
+    var locationMap = <String, dynamic>{
+      "latitude": location.latitude.toString(),
+      "longitude": location.longitude.toString(),
+      "altitude": location.altitude.toString(),
+      "accuracy": location.accuracy.toString(),
+      "bearing": location.bearing.toString(),
+      "speed": location.speed.toString(),
+      "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
+          .toString(),
+      "userUid": FirebaseAuth.instance.currentUser?.uid
+    };
+    db.collection("locations").add(locationMap);
   }
 }
