@@ -83,6 +83,16 @@ class MapSampleState extends State<MapSample> {
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
           ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ElevatedButton(
+                onPressed: () => _finishActivity(),
+                child: const Text("Finish Activity"),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -125,14 +135,11 @@ class MapSampleState extends State<MapSample> {
         .collection("locations")
         .where("userUid",
             isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .where("activityUid",
-            isEqualTo: "$currentActivity")
+        .where("activityUid", isEqualTo: "$currentActivity")
         .get();
 
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
-
-  
 
   _getCurrentActivity() async {
     var db = FirebaseFirestore.instance;
@@ -149,5 +156,19 @@ class MapSampleState extends State<MapSample> {
     } else {
       return "";
     }
+  }
+
+  _finishActivity() {
+    _finishActivityStuff();
+  }
+
+  _finishActivityStuff() async {
+    var currentActivity = await _getCurrentActivity();
+    if (currentActivity != "") {
+      var db = FirebaseFirestore.instance;
+      final ref = db.collection("activities").doc(currentActivity);
+      await ref.update({"isActive": false});
+    }
+    Navigator.pop(context);
   }
 }
