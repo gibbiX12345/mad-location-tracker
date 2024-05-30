@@ -31,14 +31,61 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const ListView(title: 'LocationTracker'),
+      navigatorObservers: [routeObserver],
     );
   }
 }
 
-class ListView extends StatelessWidget {
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
+class ListView extends StatefulWidget {
   const ListView({super.key, required this.title});
 
   final String title;
+
+  @override
+  State<ListView> createState() => _ListViewState();
+}
+
+class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteAware {
+  var _currentActivity = "";
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _getCurrentActivity();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute? route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _getCurrentActivity();
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _getCurrentActivity();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,14 +124,15 @@ class ListView extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => {_startNewActivity(context)},
         tooltip: 'Add a new activity',
-        label: const Row(children: [Icon(Icons.add), Text('Activity')]),
+        label: _currentActivity == ""
+            ? const Row(children: [Icon(Icons.add), Text('Activity')])
+            : const Text('Resume Activity'),
       ),
     );
   }
 
   _startNewActivity(BuildContext context) async {
-    var currentActivity = await _getCurrentActivity();
-    if (currentActivity == "") {
+    if (_currentActivity == "") {
       var db = FirebaseFirestore.instance;
       var activityMap = <String, dynamic>{
         "name": "My Activity",
@@ -214,7 +262,6 @@ class ListView extends StatelessWidget {
 
   _saveNewLocation(Location location) async {
     var db = FirebaseFirestore.instance;
-    var currentActivity = await _getCurrentActivity();
     var locationMap = <String, dynamic>{
       "latitude": location.latitude.toString(),
       "longitude": location.longitude.toString(),
@@ -225,7 +272,7 @@ class ListView extends StatelessWidget {
       "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
           .toString(),
       "userUid": FirebaseAuth.instance.currentUser?.uid,
-      "activityUid": currentActivity
+      "activityUid": _currentActivity
     };
     db.collection("locations").add(locationMap);
   }
@@ -240,10 +287,12 @@ class ListView extends StatelessWidget {
         .get();
 
     var activities = snapshot.docs;
-    if (activities.isNotEmpty) {
-      return activities.first.id;
-    } else {
-      return "";
-    }
+    setState(() {
+      if (activities.isNotEmpty) {
+        _currentActivity = activities.first.id;
+      } else {
+        _currentActivity = "";
+      }
+    });
   }
 }
