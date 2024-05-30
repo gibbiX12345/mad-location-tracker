@@ -147,6 +147,7 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
       context,
       MaterialPageRoute(builder: (context) => const MapView()),
     );
+    _getCurrentActivity();
   }
 
   _requestPermissions({required BuildContext context}) async {
@@ -254,10 +255,27 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
     BackgroundLocation.getLocationUpdates((location) {
       _saveNewLocation(location);
     });
+    
+
+    if (context.mounted) {
+      var snackBar = const SnackBar(
+        content: Text("Location Service started"),
+        duration: Duration(seconds: 1),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
   }
 
   _stopLocationService({required BuildContext context}) async {
     BackgroundLocation.stopLocationService();
+    
+    if (context.mounted) {
+      var snackBar = const SnackBar(
+        content: Text("Location Service stopped"),
+        duration: Duration(seconds: 1),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
   }
 
   _saveNewLocation(Location location) async {
@@ -290,8 +308,10 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
     setState(() {
       if (activities.isNotEmpty) {
         _currentActivity = activities.first.id;
+        _startLocationService(context: context);
       } else {
         _currentActivity = "";
+        _stopLocationService(context: context);
       }
     });
   }
