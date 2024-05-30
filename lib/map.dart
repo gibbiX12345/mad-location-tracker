@@ -22,7 +22,7 @@ class MapSample extends StatefulWidget {
   State<MapSample> createState() => MapSampleState();
 }
 
-class MapSampleState extends State<MapSample> {
+class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   static late Completer<GoogleMapController> _controllerCompleter;
   late GoogleMapController _controller;
   Timer? _timer;
@@ -31,8 +31,11 @@ class MapSampleState extends State<MapSample> {
 
   @override
   void initState() {
+    WidgetsBinding.instance.addObserver(this);
     _controllerCompleter = Completer<GoogleMapController>();
     _fetchLocations();
+    _timer = Timer.periodic(
+        const Duration(seconds: 15), (Timer t) => _fetchLocations());
     super.initState();
   }
 
@@ -50,14 +53,25 @@ class MapSampleState extends State<MapSample> {
           )));
       _setInitialCameraPosition(_controller);
     });
-    _timer = Timer.periodic(
-        const Duration(seconds: 15), (Timer t) => _fetchLocations());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused) {
+      _timer?.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      _fetchLocations();
+      _timer = Timer.periodic(
+          const Duration(seconds: 15), (Timer t) => _fetchLocations());
+    }
   }
 
   @override
