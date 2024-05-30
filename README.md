@@ -2,15 +2,8 @@
 
 A new Flutter project.
 
-## Getting Started
+## Firebase Authentication
 
-This project is a starting point for a Flutter application.
+To use the firebase authentication in android add the SHA-1 and SHA-256 fingerprints to the firebase project: https://console.firebase.google.com/project/mad-location-tracker/settings/general/android:com.example.mad_location_tracker
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+After adding the fingerprints, download the new google-services.json file and replace the file in android\app
