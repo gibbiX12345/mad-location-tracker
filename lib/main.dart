@@ -1,5 +1,6 @@
 import 'package:background_location/background_location.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -47,7 +48,8 @@ class ListView extends StatefulWidget {
   State<ListView> createState() => _ListViewState();
 }
 
-class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteAware {
+class _ListViewState extends State<ListView>
+    with WidgetsBindingObserver, RouteAware {
   var _currentActivity = "";
 
   @override
@@ -65,7 +67,6 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
       routeObserver.subscribe(this, route);
     }
   }
-
 
   @override
   void dispose() {
@@ -141,6 +142,7 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
         "userUid": FirebaseAuth.instance.currentUser?.uid
       };
       db.collection("activities").add(activityMap);
+      _logNewActivity();
     }
 
     Navigator.push(
@@ -148,6 +150,10 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
       MaterialPageRoute(builder: (context) => const MapView()),
     );
     _getCurrentActivity();
+  }
+
+  _logNewActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
   }
 
   _requestPermissions({required BuildContext context}) async {
@@ -228,6 +234,7 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
         if (user != null) {
           message =
               "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
+              _logSignedIn();
         } else {
           message = "error on sign-in";
         }
@@ -243,6 +250,11 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
     }
   }
 
+  
+  _logSignedIn() {
+    FirebaseAnalytics.instance.logSignUp(signUpMethod: 'Google');
+  }
+
   _startLocationService({required BuildContext context}) async {
     await BackgroundLocation.setAndroidNotification(
       title: 'Background service is running',
@@ -255,7 +267,6 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
     BackgroundLocation.getLocationUpdates((location) {
       _saveNewLocation(location);
     });
-    
 
     if (context.mounted) {
       var snackBar = const SnackBar(
@@ -268,7 +279,7 @@ class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteA
 
   _stopLocationService({required BuildContext context}) async {
     BackgroundLocation.stopLocationService();
-    
+
     if (context.mounted) {
       var snackBar = const SnackBar(
         content: Text("Location Service stopped"),

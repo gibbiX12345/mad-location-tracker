@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -182,7 +183,14 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
       var db = FirebaseFirestore.instance;
       final ref = db.collection("activities").doc(currentActivity);
       await ref.update({"isActive": false});
+      _logFinishedActivity();
     }
     Navigator.pop(context);
+  }
+
+  
+
+  _logFinishedActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'activity_finished');
   }
 }
