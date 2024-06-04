@@ -68,7 +68,7 @@ class _ListViewState extends State<ListView>
       });
     });
 
-    _getCurrentActivity();
+    _retrieveCurrentActivity();
   }
 
   @override
@@ -92,13 +92,13 @@ class _ListViewState extends State<ListView>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _getCurrentActivity();
+      _retrieveCurrentActivity();
     }
   }
 
   @override
   void didPopNext() {
-    _getCurrentActivity();
+    _retrieveCurrentActivity();
   }
 
   @override
@@ -182,7 +182,7 @@ class _ListViewState extends State<ListView>
       context,
       MaterialPageRoute(builder: (context) => const MapView()),
     );
-    _getCurrentActivity();
+    _retrieveCurrentActivity();
   }
 
   _logNewActivity() {
@@ -366,7 +366,7 @@ class _ListViewState extends State<ListView>
     db.collection("locations").add(locationMap);
   }
 
-  _getCurrentActivity() async {
+  _retrieveCurrentActivity() async {
     var db = FirebaseFirestore.instance;
     var snapshot = await db
         .collection("activities")
