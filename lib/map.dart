@@ -70,6 +70,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
       _timer?.cancel();
     } else if (state == AppLifecycleState.resumed) {
       _fetchLocations();
+      _timer?.cancel();
       _timer = Timer.periodic(
           const Duration(seconds: 15), (Timer t) => _fetchLocations());
     }
