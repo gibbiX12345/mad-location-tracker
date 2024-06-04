@@ -134,6 +134,10 @@ class _ListViewState extends State<ListView>
 
   _startNewActivity(BuildContext context) async {
     if (_currentActivity == "") {
+      if (FirebaseAuth.instance.currentUser == null) {
+        _reportNotLoggedIn();
+        return;
+      }
       var db = FirebaseFirestore.instance;
       var activityMap = <String, dynamic>{
         "name": "My Activity",
@@ -179,6 +183,16 @@ class _ListViewState extends State<ListView>
       var snackBar = SnackBar(
         content: Text(message),
         duration: duration,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
+
+  _reportNotLoggedIn() {
+    if (context.mounted) {
+      var snackBar = const SnackBar(
+        content: Text("You're not logged in."),
+        duration: Duration(seconds: 3),
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
@@ -234,7 +248,7 @@ class _ListViewState extends State<ListView>
         if (user != null) {
           message =
               "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
-              _logSignedIn();
+          _logSignedIn();
         } else {
           message = "error on sign-in";
         }
@@ -250,7 +264,6 @@ class _ListViewState extends State<ListView>
     }
   }
 
-  
   _logSignedIn() {
     FirebaseAnalytics.instance.logSignUp(signUpMethod: 'Google');
   }
