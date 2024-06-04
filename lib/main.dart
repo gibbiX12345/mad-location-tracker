@@ -109,14 +109,14 @@ class _ListViewState extends State<ListView>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'List main view',
-            ),
-            ElevatedButton(
-                onPressed: () {
-                  _requestPermissions(context: context);
-                },
-                child: const Text("Request Permissions")),
+            // const Text(
+            //   'List main view',
+            // ),
+            // ElevatedButton(
+            //     onPressed: () {
+            //       _requestPermissions(context: context);
+            //     },
+            //     child: const Text("Request Permissions")),
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: _isSignedIn()
@@ -167,6 +167,11 @@ class _ListViewState extends State<ListView>
         _reportNotLoggedIn();
         return;
       }
+
+      if (!await _requestPermissions(context: context)) {
+        return;
+      }
+
       var db = FirebaseFirestore.instance;
       var activityMap = <String, dynamic>{
         "name": "My Activity",
@@ -178,10 +183,12 @@ class _ListViewState extends State<ListView>
       _logNewActivity();
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const MapView()),
-    );
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const MapView()),
+      );
+    }
     _retrieveCurrentActivity();
   }
 
@@ -189,23 +196,32 @@ class _ListViewState extends State<ListView>
     FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
   }
 
-  _requestPermissions({required BuildContext context}) async {
-    await _requestLocationPermission(context: context);
-    await _requestNotificationPermission(context: context);
+  Future<bool> _requestPermissions({required BuildContext context}) async {
+    if (!await _requestLocationPermission(context: context)) {
+      return false;
+    }
+    if (!context.mounted ||
+        !await _requestNotificationPermission(context: context)) {
+      return false;
+    }
+
+    return true;
   }
 
-  _requestLocationPermission({required BuildContext context}) async {
+  Future<bool> _requestLocationPermission(
+      {required BuildContext context}) async {
     String message;
     Duration duration;
     if (await Permission.locationWhenInUse.shouldShowRequestRationale) {
       message = "You've already denied Location Access...";
-      duration = const Duration(seconds: 2);
+      duration = const Duration(seconds: 3);
     } else {
       var status = await Permission.locationWhenInUse.request();
-      message = status.isGranted
-          ? "Location Access granted"
-          : "Location Access denied";
-      duration = const Duration(seconds: 1);
+      if (status.isGranted) {
+        return true;
+      }
+      message = "Location Access denied";
+      duration = const Duration(seconds: 2);
     }
 
     if (context.mounted) {
@@ -215,30 +231,34 @@ class _ListViewState extends State<ListView>
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
+
+    return false;
   }
 
   _reportNotLoggedIn() {
     if (context.mounted) {
       var snackBar = const SnackBar(
-        content: Text("You're not logged in."),
+        content: Text("You're not signed in."),
         duration: Duration(seconds: 3),
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
   }
 
-  _requestNotificationPermission({required BuildContext context}) async {
+  Future<bool> _requestNotificationPermission(
+      {required BuildContext context}) async {
     String message;
     Duration duration;
     if (await Permission.notification.shouldShowRequestRationale) {
       message = "You've already denied Notification Access...";
-      duration = const Duration(seconds: 2);
+      duration = const Duration(seconds: 3);
     } else {
       var status = await Permission.notification.request();
-      message = status.isGranted
-          ? "Notification Permission granted"
-          : "Notification Permission denied";
-      duration = const Duration(seconds: 1);
+      if (status.isGranted) {
+        return true;
+      }
+      message = "Notification Permission denied";
+      duration = const Duration(seconds: 2);
     }
 
     if (context.mounted) {
@@ -248,6 +268,8 @@ class _ListViewState extends State<ListView>
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
+
+    return false;
   }
 
   _signOut({required BuildContext context}) async {
@@ -367,6 +389,10 @@ class _ListViewState extends State<ListView>
   }
 
   _retrieveCurrentActivity() async {
+    if (!_isSignedIn()) {
+      return;
+    }
+
     var db = FirebaseFirestore.instance;
     var snapshot = await db
         .collection("activities")
