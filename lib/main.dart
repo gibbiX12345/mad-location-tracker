@@ -1,3 +1,5 @@
+import 'package:background_location/background_location.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -29,14 +31,61 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const ListView(title: 'LocationTracker'),
+      navigatorObservers: [routeObserver],
     );
   }
 }
 
-class ListView extends StatelessWidget {
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
+class ListView extends StatefulWidget {
   const ListView({super.key, required this.title});
 
   final String title;
+
+  @override
+  State<ListView> createState() => _ListViewState();
+}
+
+class _ListViewState extends State<ListView> with WidgetsBindingObserver, RouteAware {
+  var _currentActivity = "";
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _getCurrentActivity();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute? route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _getCurrentActivity();
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _getCurrentActivity();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,31 +100,62 @@ class ListView extends StatelessWidget {
             ),
             ElevatedButton(
                 onPressed: () {
-                  _askForLocationPermissions(context: context);
+                  _requestPermissions(context: context);
                 },
-                child: const Text("Ask for Location Permissions")),
+                child: const Text("Request Permissions")),
             ElevatedButton(
                 onPressed: () {
                   _signInWithGoogle(context: context);
                 },
-                child: const Text("Sign in with Google"))
+                child: const Text("Sign in with Google")),
+            ElevatedButton(
+                onPressed: () {
+                  _startLocationService(context: context);
+                },
+                child: const Text("Start Location-Service")),
+            ElevatedButton(
+                onPressed: () {
+                  _stopLocationService(context: context);
+                },
+                child: const Text("Stop Location-Service"))
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const MapView()),
-          )
-        },
+        onPressed: () => {_startNewActivity(context)},
         tooltip: 'Add a new activity',
-        label: const Row(children: [Icon(Icons.add), Text('Activity')]),
+        label: _currentActivity == ""
+            ? const Row(children: [Icon(Icons.add), Text('Activity')])
+            : const Text('Resume Activity'),
       ),
     );
   }
 
-  _askForLocationPermissions({required BuildContext context}) async {
+  _startNewActivity(BuildContext context) async {
+    if (_currentActivity == "") {
+      var db = FirebaseFirestore.instance;
+      var activityMap = <String, dynamic>{
+        "name": "My Activity",
+        "isActive": true,
+        "time": DateTime.now().toString(),
+        "userUid": FirebaseAuth.instance.currentUser?.uid
+      };
+      db.collection("activities").add(activityMap);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MapView()),
+    );
+    _getCurrentActivity();
+  }
+
+  _requestPermissions({required BuildContext context}) async {
+    await _requestLocationPermission(context: context);
+    await _requestNotificationPermission(context: context);
+  }
+
+  _requestLocationPermission({required BuildContext context}) async {
     String message;
     Duration duration;
     if (await Permission.locationWhenInUse.shouldShowRequestRationale) {
@@ -98,10 +178,34 @@ class ListView extends StatelessWidget {
     }
   }
 
+  _requestNotificationPermission({required BuildContext context}) async {
+    String message;
+    Duration duration;
+    if (await Permission.notification.shouldShowRequestRationale) {
+      message = "You've already denied Notification Access...";
+      duration = const Duration(seconds: 2);
+    } else {
+      var status = await Permission.notification.request();
+      message = status.isGranted
+          ? "Notification Permission granted"
+          : "Notification Permission denied";
+      duration = const Duration(seconds: 1);
+    }
+
+    if (context.mounted) {
+      var snackBar = SnackBar(
+        content: Text(message),
+        duration: duration,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
+
   _signInWithGoogle({required BuildContext context}) async {
     var message = "";
     if (FirebaseAuth.instance.currentUser != null) {
-      message = "already signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
+      message =
+          "already signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
     } else {
       // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
@@ -122,7 +226,8 @@ class ListView extends StatelessWidget {
           .then((authResult) {
         final user = authResult.user;
         if (user != null) {
-          message = "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
+          message =
+              "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
         } else {
           message = "error on sign-in";
         }
@@ -136,5 +241,78 @@ class ListView extends StatelessWidget {
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
+  }
+
+  _startLocationService({required BuildContext context}) async {
+    await BackgroundLocation.setAndroidNotification(
+      title: 'Background service is running',
+      message: 'Background location in progress',
+      icon: '@mipmap/ic_launcher',
+    );
+    await BackgroundLocation.setAndroidConfiguration(30000);
+    await BackgroundLocation.stopLocationService();
+    await BackgroundLocation.startLocationService(distanceFilter: 0);
+    BackgroundLocation.getLocationUpdates((location) {
+      _saveNewLocation(location);
+    });
+    
+
+    if (context.mounted) {
+      var snackBar = const SnackBar(
+        content: Text("Location Service started"),
+        duration: Duration(seconds: 1),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
+
+  _stopLocationService({required BuildContext context}) async {
+    BackgroundLocation.stopLocationService();
+    
+    if (context.mounted) {
+      var snackBar = const SnackBar(
+        content: Text("Location Service stopped"),
+        duration: Duration(seconds: 1),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
+
+  _saveNewLocation(Location location) async {
+    var db = FirebaseFirestore.instance;
+    var locationMap = <String, dynamic>{
+      "latitude": location.latitude.toString(),
+      "longitude": location.longitude.toString(),
+      "altitude": location.altitude.toString(),
+      "accuracy": location.accuracy.toString(),
+      "bearing": location.bearing.toString(),
+      "speed": location.speed.toString(),
+      "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
+          .toString(),
+      "userUid": FirebaseAuth.instance.currentUser?.uid,
+      "activityUid": _currentActivity
+    };
+    db.collection("locations").add(locationMap);
+  }
+
+  _getCurrentActivity() async {
+    var db = FirebaseFirestore.instance;
+    var snapshot = await db
+        .collection("activities")
+        .where("userUid",
+            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
+        .where("isActive", isEqualTo: true)
+        .get();
+
+    var activities = snapshot.docs;
+    setState(() {
+      if (activities.isNotEmpty) {
+        _currentActivity = activities.first.id;
+        _startLocationService(context: context);
+      } else {
+        _currentActivity = "";
+        _stopLocationService(context: context);
+      }
+    });
   }
 }
