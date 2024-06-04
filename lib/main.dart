@@ -261,6 +261,7 @@ class _ListViewState extends State<ListView>
       message: 'Background location in progress',
       icon: '@mipmap/ic_launcher',
     );
+    var wasRunning = await BackgroundLocation.isServiceRunning();
     await BackgroundLocation.setAndroidConfiguration(30000);
     await BackgroundLocation.stopLocationService();
     await BackgroundLocation.startLocationService(distanceFilter: 0);
@@ -268,7 +269,7 @@ class _ListViewState extends State<ListView>
       _saveNewLocation(location);
     });
 
-    if (context.mounted) {
+    if (context.mounted && !wasRunning) {
       var snackBar = const SnackBar(
         content: Text("Location Service started"),
         duration: Duration(seconds: 1),
@@ -278,9 +279,10 @@ class _ListViewState extends State<ListView>
   }
 
   _stopLocationService({required BuildContext context}) async {
-    BackgroundLocation.stopLocationService();
+    var wasRunning = await BackgroundLocation.isServiceRunning();
+    await BackgroundLocation.stopLocationService();
 
-    if (context.mounted) {
+    if (context.mounted && wasRunning) {
       var snackBar = const SnackBar(
         content: Text("Location Service stopped"),
         duration: Duration(seconds: 1),
