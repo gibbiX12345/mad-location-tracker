@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:background_location/background_location.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -50,12 +52,22 @@ class ListView extends StatefulWidget {
 
 class _ListViewState extends State<ListView>
     with WidgetsBindingObserver, RouteAware {
+  late StreamSubscription<User?> _authStateSubscription;
+  User? _user;
   var _currentActivity = "";
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _authStateSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      setState(() {
+        _user = user;
+      });
+    });
+
     _getCurrentActivity();
   }
 
@@ -72,6 +84,7 @@ class _ListViewState extends State<ListView>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     routeObserver.unsubscribe(this);
+    _authStateSubscription.cancel();
     super.dispose();
   }
 
@@ -104,21 +117,33 @@ class _ListViewState extends State<ListView>
                   _requestPermissions(context: context);
                 },
                 child: const Text("Request Permissions")),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _isSignedIn()
+                  ? Text("Signed in as ${_user?.displayName}")
+                  : const Text("Not signed in"),
+            ),
             ElevatedButton(
                 onPressed: () {
-                  _signInWithGoogle(context: context);
+                  if (_isSignedIn()) {
+                    _signOut(context: context);
+                  } else {
+                    _signInWithGoogle(context: context);
+                  }
                 },
-                child: const Text("Sign in with Google")),
-            ElevatedButton(
-                onPressed: () {
-                  _startLocationService(context: context);
-                },
-                child: const Text("Start Location-Service")),
-            ElevatedButton(
-                onPressed: () {
-                  _stopLocationService(context: context);
-                },
-                child: const Text("Stop Location-Service"))
+                child: _isSignedIn()
+                    ? const Text("Sign out")
+                    : const Text("Sign in with Google")),
+            // ElevatedButton(
+            //     onPressed: () {
+            //       _startLocationService(context: context);
+            //     },
+            //     child: const Text("Start Location-Service")),
+            // ElevatedButton(
+            //     onPressed: () {
+            //       _stopLocationService(context: context);
+            //     },
+            //     child: const Text("Stop Location-Service"))
           ],
         ),
       ),
@@ -130,6 +155,10 @@ class _ListViewState extends State<ListView>
             : const Text('Resume Activity'),
       ),
     );
+  }
+
+  _isSignedIn() {
+    return _user != null;
   }
 
   _startNewActivity(BuildContext context) async {
@@ -216,6 +245,22 @@ class _ListViewState extends State<ListView>
       var snackBar = SnackBar(
         content: Text(message),
         duration: duration,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
+
+  _signOut({required BuildContext context}) async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      return;
+    }
+
+    await FirebaseAuth.instance.signOut();
+
+    if (context.mounted) {
+      var snackBar = const SnackBar(
+        content: Text("Signed out"),
+        duration: Duration(seconds: 1),
       );
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
