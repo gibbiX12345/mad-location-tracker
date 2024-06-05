@@ -155,12 +155,40 @@ class _ListViewState extends State<ListView>
 
   List<Widget> _activityList() {
     List<Widget> list = _activities.map((activity) {
+      final renameFieldController = TextEditingController();
+      renameFieldController.text = activity["name"];
       return ListTile(
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              onPressed: () {},
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text("Rename \"${activity["name"]}\"?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          _updateActivity(
+                              activity["id"], renameFieldController.text);
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Save"),
+                      )
+                    ],
+                    content: SingleChildScrollView(
+                      child: TextFormField(
+                        controller: renameFieldController,
+                      ),
+                    ),
+                  ),
+                );
+              },
               icon: const Icon(Icons.edit),
             ),
             IconButton(
@@ -245,6 +273,13 @@ class _ListViewState extends State<ListView>
       _logNewActivity();
     }
     _showMapView(context, "");
+    _retrieveActivities();
+  }
+
+  _updateActivity(String activityId, String newName) async {
+    var db = FirebaseFirestore.instance;
+    final ref = db.collection("activities").doc(activityId);
+    await ref.update({"name": newName});
     _retrieveActivities();
   }
 
