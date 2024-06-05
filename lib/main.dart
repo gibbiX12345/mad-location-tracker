@@ -144,7 +144,13 @@ class _ListViewState extends State<ListView>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => {_startNewActivity(context)},
+        onPressed: () {
+          if (_currentActivityId == null) {
+            _requestNameAndStartNewActivity(context);
+          } else {
+            _showMapView(context, "");
+          }
+        },
         tooltip: 'Add a new activity',
         label: _currentActivityId == null
             ? const Row(children: [Icon(Icons.add), Text('Activity')])
@@ -251,7 +257,7 @@ class _ListViewState extends State<ListView>
     return _user != null;
   }
 
-  _startNewActivity(BuildContext context) async {
+  _startNewActivity(BuildContext context, String activityName) async {
     if (_currentActivityId == null) {
       if (FirebaseAuth.instance.currentUser == null) {
         _reportNotLoggedIn();
@@ -264,7 +270,7 @@ class _ListViewState extends State<ListView>
 
       var db = FirebaseFirestore.instance;
       var activityMap = <String, dynamic>{
-        "name": "My Activity",
+        "name": activityName,
         "isActive": true,
         "time": DateTime.now().toString(),
         "userUid": FirebaseAuth.instance.currentUser?.uid
@@ -274,6 +280,34 @@ class _ListViewState extends State<ListView>
     }
     _showMapView(context, "");
     _retrieveActivities();
+  }
+
+  _requestNameAndStartNewActivity(BuildContext context) {
+    final activityNameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("New Activity"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startNewActivity(context, activityNameController.text);
+            },
+            child: const Text("Create"),
+          )
+        ],
+        content: SingleChildScrollView(
+          child: TextFormField(
+            controller: activityNameController,
+          ),
+        ),
+      ),
+    );
   }
 
   _updateActivity(String activityId, String newName) async {
