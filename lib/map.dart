@@ -8,16 +8,20 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mad_location_tracker/app_bar.dart';
 
 class MapView extends StatelessWidget {
-  const MapView({super.key});
+  const MapView({super.key, required this.activity});
+
+  final String activity;
 
   @override
   Widget build(BuildContext context) {
-    return const MapSample();
+    return MapSample(activity: activity);
   }
 }
 
 class MapSample extends StatefulWidget {
-  const MapSample({super.key});
+  const MapSample({super.key, required this.activity});
+
+  final String activity;
 
   @override
   State<MapSample> createState() => MapSampleState();
@@ -146,7 +150,10 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   }
 
   _getLocations() async {
-    var currentActivity = await _getCurrentActivity();
+    var currentActivity = widget.activity;
+    if (currentActivity == "") {
+      currentActivity = await _getCurrentActivity();
+    }
     var snapshot = await db
         .collection("locations")
         .where("userUid",
@@ -188,8 +195,6 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
     }
     Navigator.pop(context);
   }
-
-  
 
   _logFinishedActivity() {
     FirebaseAnalytics.instance.logEvent(name: 'activity_finished');

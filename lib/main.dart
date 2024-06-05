@@ -193,9 +193,14 @@ class _ListViewState extends State<ListView>
         ),
         title: Text(
           activity["name"] + (activity["isActive"] ? " (active)" : ""),
-          style: activity["isActive"] ? const TextStyle(fontWeight: FontWeight.bold) : null,
+          style: activity["isActive"]
+              ? const TextStyle(fontWeight: FontWeight.bold)
+              : null,
         ),
         subtitle: Text(activity["time"]),
+        onTap: () => {
+          _showMapView(context, activity["id"])
+        },
       ) as Widget;
     }).toList();
     list.add(Container(height: 80.0));
@@ -238,18 +243,21 @@ class _ListViewState extends State<ListView>
       db.collection("activities").add(activityMap);
       _logNewActivity();
     }
-
-    if (context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const MapView()),
-      );
-    }
+    _showMapView(context, "");
     _retrieveActivities();
   }
 
   _logNewActivity() {
     FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  }
+
+  _showMapView(BuildContext context, String activityId) {
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => MapView(activity: activityId)),
+      );
+    }
   }
 
   Future<bool> _requestPermissions({required BuildContext context}) async {
