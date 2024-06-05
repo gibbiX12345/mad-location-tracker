@@ -577,7 +577,7 @@ class _ListViewState extends State<ListView>
 
     if (!mounted) return;
 
-    if (activities.isNotEmpty) {
+    if (_currentActivityId != null && _currentActivityId != "") {
       await _startLocationService(context: context);
     } else {
       await _stopLocationService(context: context);
