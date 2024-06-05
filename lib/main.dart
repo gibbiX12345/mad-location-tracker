@@ -54,21 +54,21 @@ class _ListViewState extends State<ListView>
     with WidgetsBindingObserver, RouteAware {
   late StreamSubscription<User?> _authStateSubscription;
   User? _user;
-  var _currentActivity = "";
+  String? _currentActivityId;
+
+  var _activities = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _authStateSubscription =
-        FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      setState(() {
-        _user = user;
-      });
-    });
+    _user = FirebaseAuth.instance.currentUser;
+    _authStateSubscription = FirebaseAuth.instance
+        .authStateChanges()
+        .listen((User? user) => _onAuthStateChange(user));
 
-    _retrieveCurrentActivity();
+    _retrieveActivities();
   }
 
   @override
@@ -92,69 +92,87 @@ class _ListViewState extends State<ListView>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _retrieveCurrentActivity();
+      _retrieveActivities();
     }
   }
 
   @override
   void didPopNext() {
-    _retrieveCurrentActivity();
+    _retrieveActivities();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: getAppBar(context),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            // const Text(
-            //   'List main view',
-            // ),
-            // ElevatedButton(
-            //     onPressed: () {
-            //       _requestPermissions(context: context);
-            //     },
-            //     child: const Text("Request Permissions")),
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: _isSignedIn()
-                  ? Text("Signed in as ${_user?.displayName}")
-                  : const Text("Not signed in"),
-            ),
-            ElevatedButton(
-                onPressed: () {
-                  if (_isSignedIn()) {
-                    _signOut(context: context);
-                  } else {
-                    _signInWithGoogle(context: context);
-                  }
-                },
-                child: _isSignedIn()
-                    ? const Text("Sign out")
-                    : const Text("Sign in with Google")),
-            // ElevatedButton(
-            //     onPressed: () {
-            //       _startLocationService(context: context);
-            //     },
-            //     child: const Text("Start Location-Service")),
-            // ElevatedButton(
-            //     onPressed: () {
-            //       _stopLocationService(context: context);
-            //     },
-            //     child: const Text("Stop Location-Service"))
-          ],
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: Padding(
+          padding: const EdgeInsets.all(18.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: <Widget>[
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                _isSignedIn()
+                    ? Text("Signed in as ${_user?.displayName}")
+                    : const Text("Not signed in"),
+                ElevatedButton(
+                    onPressed: () {
+                      if (_isSignedIn()) {
+                        _signOut(context: context);
+                      } else {
+                        _signInWithGoogle(context: context);
+                      }
+                    },
+                    child: _isSignedIn()
+                        ? const Text("Sign out")
+                        : const Text("Sign in with Google")),
+              ]),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10.0),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _activityList(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => {_startNewActivity(context)},
         tooltip: 'Add a new activity',
-        label: _currentActivity == ""
+        label: _currentActivityId == null
             ? const Row(children: [Icon(Icons.add), Text('Activity')])
             : const Text('Resume Activity'),
       ),
     );
+  }
+
+  List<Widget> _activityList() {
+    List<Widget> list = _activities.map((activity) {
+      return ListTile(
+        title: Text(activity["name"]),
+        subtitle: Text(activity["time"]),
+      ) as Widget;
+    }).toList();
+    list.add(Container(height: 80.0));
+    return list;
+  }
+
+  _onAuthStateChange(User? user) {
+    setState(() {
+      _user = user;
+    });
+    _retrieveActivities();
+  }
+
+  Future<void> _onRefresh() async {
+    await _retrieveActivities();
   }
 
   _isSignedIn() {
@@ -162,7 +180,7 @@ class _ListViewState extends State<ListView>
   }
 
   _startNewActivity(BuildContext context) async {
-    if (_currentActivity == "") {
+    if (_currentActivityId == null) {
       if (FirebaseAuth.instance.currentUser == null) {
         _reportNotLoggedIn();
         return;
@@ -189,7 +207,7 @@ class _ListViewState extends State<ListView>
         MaterialPageRoute(builder: (context) => const MapView()),
       );
     }
-    _retrieveCurrentActivity();
+    _retrieveActivities();
   }
 
   _logNewActivity() {
@@ -383,13 +401,17 @@ class _ListViewState extends State<ListView>
       "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
           .toString(),
       "userUid": FirebaseAuth.instance.currentUser?.uid,
-      "activityUid": _currentActivity
+      "activityUid": _currentActivityId
     };
     db.collection("locations").add(locationMap);
   }
 
-  _retrieveCurrentActivity() async {
+  _retrieveActivities() async {
     if (!_isSignedIn()) {
+      setState(() {
+        _currentActivityId = null;
+        _activities = [];
+      });
       return;
     }
 
@@ -398,18 +420,31 @@ class _ListViewState extends State<ListView>
         .collection("activities")
         .where("userUid",
             isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .where("isActive", isEqualTo: true)
+        .orderBy("time", descending: true)
+        .limit(50)
         .get();
 
     var activities = snapshot.docs;
     setState(() {
-      if (activities.isNotEmpty) {
-        _currentActivity = activities.first.id;
-        _startLocationService(context: context);
-      } else {
-        _currentActivity = "";
-        _stopLocationService(context: context);
-      }
+      _activities = activities.map((activity) {
+        return {
+          "id": activity.id,
+          "name": activity["name"],
+          "time": activity["time"],
+          "isActive": activity["isActive"]
+        };
+      }).toList();
+
+      _currentActivityId =
+          activities.where((activity) => activity["isActive"]).firstOrNull?.id;
     });
+
+    if (!mounted) return;
+
+    if (activities.isNotEmpty) {
+      await _startLocationService(context: context);
+    } else {
+      await _stopLocationService(context: context);
+    }
   }
 }
