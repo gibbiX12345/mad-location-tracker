@@ -107,40 +107,40 @@ class _ListViewState extends State<ListView>
       appBar: getAppBar(context),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
-        child: Padding(
-          padding: const EdgeInsets.all(18.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: <Widget>[
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                _isSignedIn()
-                    ? Text("Signed in as ${_user?.displayName}")
-                    : const Text("Not signed in"),
-                ElevatedButton(
-                    onPressed: () {
-                      if (_isSignedIn()) {
-                        _signOut(context: context);
-                      } else {
-                        _signInWithGoogle(context: context);
-                      }
-                    },
-                    child: _isSignedIn()
-                        ? const Text("Sign out")
-                        : const Text("Sign in with Google")),
-              ]),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 10.0),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: _activityList(),
-                    ),
-                  ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(18.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _isSignedIn()
+                      ? Text("Signed in as ${_user?.displayName}")
+                      : const Text("Not signed in"),
+                  ElevatedButton(
+                      onPressed: () {
+                        if (_isSignedIn()) {
+                          _signOut(context: context);
+                        } else {
+                          _signInWithGoogle(context: context);
+                        }
+                      },
+                      child: _isSignedIn()
+                          ? const Text("Sign out")
+                          : const Text("Sign in with Google")),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _activityList(),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -156,7 +156,45 @@ class _ListViewState extends State<ListView>
   List<Widget> _activityList() {
     List<Widget> list = _activities.map((activity) {
       return ListTile(
-        title: Text(activity["name"]),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: () {},
+              icon: const Icon(Icons.edit),
+            ),
+            IconButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text("Delete \"${activity["name"]}\"?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Delete forever"),
+                      )
+                    ],
+                    content: const SingleChildScrollView(
+                      child: Text(
+                          "Do you really want to delete this activity? This can't be undone."),
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.delete_forever),
+              color: Colors.red,
+            ),
+          ],
+        ),
+        title: Text(
+          activity["name"] + (activity["isActive"] ? " (active)" : ""),
+          style: activity["isActive"] ? const TextStyle(fontWeight: FontWeight.bold) : null,
+        ),
         subtitle: Text(activity["time"]),
       ) as Widget;
     }).toList();
