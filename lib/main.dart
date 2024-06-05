@@ -196,7 +196,8 @@ class _ListViewState extends State<ListView>
     return list;
   }
 
-  void _showRenameActivityDialog(activity, TextEditingController renameFieldController) {
+  void _showRenameActivityDialog(
+      activity, TextEditingController renameFieldController) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -208,8 +209,7 @@ class _ListViewState extends State<ListView>
           ),
           TextButton(
             onPressed: () {
-              _updateActivity(
-                  activity["id"], renameFieldController.text);
+              _updateActivity(activity["id"], renameFieldController.text);
               Navigator.pop(context);
             },
             child: const Text("Save"),
@@ -313,6 +313,9 @@ class _ListViewState extends State<ListView>
         content: SingleChildScrollView(
           child: TextFormField(
             autofocus: true,
+            decoration: const InputDecoration(
+                hintText: 'Enter activity name',
+                border: UnderlineInputBorder()),
             controller: activityNameController,
           ),
         ),
