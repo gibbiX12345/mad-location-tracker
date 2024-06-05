@@ -217,6 +217,7 @@ class _ListViewState extends State<ListView>
         ],
         content: SingleChildScrollView(
           child: TextFormField(
+            autofocus: true,
             controller: renameFieldController,
           ),
         ),
@@ -311,6 +312,7 @@ class _ListViewState extends State<ListView>
         ],
         content: SingleChildScrollView(
           child: TextFormField(
+            autofocus: true,
             controller: activityNameController,
           ),
         ),
