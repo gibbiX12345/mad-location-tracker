@@ -175,7 +175,10 @@ class _ListViewState extends State<ListView>
                         child: const Text("Cancel"),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          _deleteActivity(activity["id"]);
+                          Navigator.pop(context);
+                        },
                         child: const Text("Delete forever"),
                       )
                     ],
@@ -198,9 +201,7 @@ class _ListViewState extends State<ListView>
               : null,
         ),
         subtitle: Text(activity["time"]),
-        onTap: () => {
-          _showMapView(context, activity["id"])
-        },
+        onTap: () => {_showMapView(context, activity["id"])},
       ) as Widget;
     }).toList();
     list.add(Container(height: 80.0));
@@ -244,6 +245,13 @@ class _ListViewState extends State<ListView>
       _logNewActivity();
     }
     _showMapView(context, "");
+    _retrieveActivities();
+  }
+
+  _deleteActivity(String activityId) async {
+    var db = FirebaseFirestore.instance;
+    final ref = db.collection("activities").doc(activityId);
+    await ref.delete();
     _retrieveActivities();
   }
 
