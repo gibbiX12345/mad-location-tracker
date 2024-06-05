@@ -169,59 +169,13 @@ class _ListViewState extends State<ListView>
           children: [
             IconButton(
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text("Rename \"${activity["name"]}\"?"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Cancel"),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          _updateActivity(
-                              activity["id"], renameFieldController.text);
-                          Navigator.pop(context);
-                        },
-                        child: const Text("Save"),
-                      )
-                    ],
-                    content: SingleChildScrollView(
-                      child: TextFormField(
-                        controller: renameFieldController,
-                      ),
-                    ),
-                  ),
-                );
+                _showRenameActivityDialog(activity, renameFieldController);
               },
               icon: const Icon(Icons.edit),
             ),
             IconButton(
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text("Delete \"${activity["name"]}\"?"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Cancel"),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          _deleteActivity(activity["id"]);
-                          Navigator.pop(context);
-                        },
-                        child: const Text("Delete forever"),
-                      )
-                    ],
-                    content: const SingleChildScrollView(
-                      child: Text(
-                          "Do you really want to delete this activity? This can't be undone."),
-                    ),
-                  ),
-                );
+                _showDeleteActivityDialog(activity);
               },
               icon: const Icon(Icons.delete_forever),
               color: Colors.red,
@@ -240,6 +194,60 @@ class _ListViewState extends State<ListView>
     }).toList();
     list.add(Container(height: 80.0));
     return list;
+  }
+
+  void _showRenameActivityDialog(activity, TextEditingController renameFieldController) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Rename \"${activity["name"]}\"?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              _updateActivity(
+                  activity["id"], renameFieldController.text);
+              Navigator.pop(context);
+            },
+            child: const Text("Save"),
+          )
+        ],
+        content: SingleChildScrollView(
+          child: TextFormField(
+            controller: renameFieldController,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteActivityDialog(activity) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete \"${activity["name"]}\"?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              _deleteActivity(activity["id"]);
+              Navigator.pop(context);
+            },
+            child: const Text("Delete forever"),
+          )
+        ],
+        content: const SingleChildScrollView(
+          child: Text(
+              "Do you really want to delete this activity? This can't be undone."),
+        ),
+      ),
+    );
   }
 
   _onAuthStateChange(User? user) {
