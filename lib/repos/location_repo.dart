@@ -21,6 +21,7 @@ class LocationRepo {
     var snapshot = await _collection
         .where("userUid", isEqualTo: _auth.currentUser?.uid)
         .where("activityUid", isEqualTo: activityUid)
+        .orderBy("time", descending: false)
         .get();
     return snapshot.docs.map((doc) => LocationModel.fromDoc(doc)).toList();
   }

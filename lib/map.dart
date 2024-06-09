@@ -32,7 +32,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   static late Completer<GoogleMapController> _controllerCompleter;
   late GoogleMapController _controller;
   Timer? _timer;
-  Set<Marker> _markers = {};
+  Set<Polyline>? _polylines;
 
   @override
   void initState() {
@@ -45,17 +45,28 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   }
 
   Future<void> _fetchLocations() async {
+    var lineColor = Theme.of(context).colorScheme.inversePrimary;
+
     var locations = await _getLocations();
     if (!_controllerCompleter.isCompleted) {
       _controller = await _controllerCompleter.future;
     }
+
+    var polyline = Polyline(
+      polylineId: const PolylineId("path"),
+      color: lineColor,
+      startCap: Cap.roundCap,
+      endCap: Cap.roundCap,
+      jointType: JointType.round,
+      width: 5,
+      points: locations
+          .map((entry) => LatLng(
+              double.parse(entry.latitude), double.parse(entry.longitude)))
+          .toList(),
+    );
+
     setState(() {
-      _markers = Set.from(locations.map((entry) => Marker(
-            markerId: MarkerId(entry.time),
-            infoWindow: InfoWindow(title: entry.time),
-            position: LatLng(
-                double.parse(entry.latitude), double.parse(entry.longitude)),
-          )));
+      _polylines = {polyline};
       _setInitialCameraPosition(_controller);
     });
   }
@@ -98,7 +109,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
               }
               _controller = controller;
             },
-            markers: _markers,
+            polylines: _polylines ?? {},
             compassEnabled: true,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
@@ -119,23 +130,22 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   }
 
   void _setInitialCameraPosition(GoogleMapController controller) {
-    if (_markers.isNotEmpty) {
-      LatLngBounds bounds = calculateBounds(_markers);
+    if (_polylines?.isNotEmpty ?? false) {
+      LatLngBounds bounds = calculateBounds(
+        _polylines?.expand((polyline) => polyline.points).toList() ?? [],
+      );
       moveCameraToFitBounds(controller, bounds);
     }
   }
 
-  LatLngBounds calculateBounds(Set<Marker> markers) {
-    double southWestLat =
-        markers.map((m) => m.position.latitude).reduce((a, b) => a < b ? a : b);
-    double southWestLng = markers
-        .map((m) => m.position.longitude)
-        .reduce((a, b) => a < b ? a : b);
-    double northEastLat =
-        markers.map((m) => m.position.latitude).reduce((a, b) => a > b ? a : b);
-    double northEastLng = markers
-        .map((m) => m.position.longitude)
-        .reduce((a, b) => a > b ? a : b);
+  LatLngBounds calculateBounds(List<LatLng> markers) {
+    final latitudes = markers.map((element) => element.latitude).toList();
+    final longitudes = markers.map((element) => element.longitude).toList();
+
+    final southWestLat = latitudes.reduce((a, b) => a < b ? a : b);
+    final southWestLng = longitudes.reduce((a, b) => a < b ? a : b);
+    final northEastLat = latitudes.reduce((a, b) => a > b ? a : b);
+    final northEastLng = longitudes.reduce((a, b) => a > b ? a : b);
 
     return LatLngBounds(
       southwest: LatLng(southWestLat, southWestLng),
