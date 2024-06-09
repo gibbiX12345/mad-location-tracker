@@ -14,6 +14,10 @@ import 'package:mad_location_tracker/models/activity_model.dart';
 import 'package:mad_location_tracker/models/location_model.dart';
 import 'package:mad_location_tracker/repos/activity_repo.dart';
 import 'package:mad_location_tracker/repos/location_repo.dart';
+import 'package:mad_location_tracker/widgets/activity_delete_dialog.dart';
+import 'package:mad_location_tracker/widgets/activity_list.dart';
+import 'package:mad_location_tracker/widgets/activity_rename_dialog.dart';
+import 'package:mad_location_tracker/widgets/sign_in_form.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
@@ -115,115 +119,51 @@ class _ListViewState extends State<ListView>
           children: <Widget>[
             Padding(
               padding: const EdgeInsets.all(18.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _isSignedIn()
-                      ? Text("Signed in as ${_user?.displayName}")
-                      : const Text("Not signed in"),
-                  ElevatedButton(
-                      onPressed: () {
-                        if (_isSignedIn()) {
-                          _signOut(context: context);
-                        } else {
-                          _signInWithGoogle(context: context);
-                        }
-                      },
-                      child: _isSignedIn()
-                          ? const Text("Sign out")
-                          : const Text("Sign in with Google")),
-                ],
+              child: SignInForm(
+                onSignOut: () => _signOut(context: context),
+                onSignIn: () => _signInWithGoogle(context: context),
+                user: _user,
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: _activityList(),
-                ),
+              child: ActivityList(
+                padding: const EdgeInsets.only(bottom: 80),
+                onOpen: (activity) =>
+                    _showMapView(context, activityId: activity.id),
+                onRename: (activity) => _showRenameActivityDialog(activity),
+                onDelete: (activity) => _showDeleteActivityDialog(activity),
+                activities: _activities,
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          if (_currentActivityId == null) {
-            _requestNameAndStartNewActivity(context);
-          } else {
-            _showMapView(context);
-          }
-        },
-        tooltip: 'Add a new activity',
-        label: _currentActivityId == null
-            ? const Row(children: [Icon(Icons.add), Text('Activity')])
-            : const Text('Resume Activity'),
-      ),
+      floatingActionButton: _buildFloatingActionButton(context),
     );
   }
 
-  List<Widget> _activityList() {
-    List<Widget> list = _activities.map((activity) {
-      final renameFieldController = TextEditingController();
-      renameFieldController.text = activity.name;
-      return ListTile(
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () {
-                _showRenameActivityDialog(activity, renameFieldController);
-              },
-              icon: const Icon(Icons.edit),
-            ),
-            IconButton(
-              onPressed: () {
-                _showDeleteActivityDialog(activity);
-              },
-              icon: const Icon(Icons.delete_forever),
-              color: Colors.red,
-            ),
-          ],
-        ),
-        title: Text(
-          activity.name + (activity.isActive ? " (active)" : ""),
-          style: activity.isActive
-              ? const TextStyle(fontWeight: FontWeight.bold)
-              : null,
-        ),
-        subtitle: Text(activity.time.toString()),
-        onTap: () => _showMapView(context, activityId: activity.id),
-      ) as Widget;
-    }).toList();
-    list.add(Container(height: 80.0));
-    return list;
+  FloatingActionButton _buildFloatingActionButton(BuildContext context) {
+    return FloatingActionButton.extended(
+      onPressed: () => _currentActivityId == null
+          ? _requestNameAndStartNewActivity(context)
+          : _showMapView(context),
+      tooltip: 'Add a new activity',
+      label: _currentActivityId == null
+          ? const Row(children: [Icon(Icons.add), Text('Activity')])
+          : const Text('Resume Activity'),
+    );
   }
 
-  void _showRenameActivityDialog(
-      activity, TextEditingController renameFieldController) {
+  void _showRenameActivityDialog(ActivityModel activity) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Rename \"${activity.name}\"?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              _updateActivity(activity.id, renameFieldController.text);
-              Navigator.pop(context);
-            },
-            child: const Text("Save"),
-          )
-        ],
-        content: SingleChildScrollView(
-          child: TextFormField(
-            autofocus: true,
-            controller: renameFieldController,
-          ),
-        ),
+      builder: (context) => ActivityRenameDialog(
+        onCancel: () => Navigator.pop(context),
+        onRename: (newName) {
+          _updateActivity(activity.id, newName);
+          Navigator.pop(context);
+        },
+        activity: activity,
       ),
     );
   }
@@ -231,33 +171,19 @@ class _ListViewState extends State<ListView>
   void _showDeleteActivityDialog(activity) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Delete \"${activity.name}\"?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              _deleteActivity(activity.id);
-              Navigator.pop(context);
-            },
-            child: const Text("Delete forever"),
-          )
-        ],
-        content: const SingleChildScrollView(
-          child: Text(
-              "Do you really want to delete this activity? This can't be undone."),
-        ),
+      builder: (context) => ActivityDeleteDialog(
+        activity: activity,
+        onCancel: () => Navigator.pop(context),
+        onDelete: () {
+          _deleteActivity(activity.id);
+          Navigator.pop(context);
+        },
       ),
     );
   }
 
   _onAuthStateChange(User? user) {
-    setState(() {
-      _user = user;
-    });
+    setState(() => _user = user);
     _retrieveActivities();
   }
 
@@ -350,19 +276,17 @@ class _ListViewState extends State<ListView>
   }
 
   Future<bool> _requestPermissions({required BuildContext context}) async {
-    if (!await _requestLocationPermission(context: context)) {
+    if (!await _requestLocationPermission(context)) {
       return false;
     }
-    if (!context.mounted ||
-        !await _requestNotificationPermission(context: context)) {
+    if (!context.mounted || !await _requestNotificationPermission(context)) {
       return false;
     }
 
     return true;
   }
 
-  Future<bool> _requestLocationPermission(
-      {required BuildContext context}) async {
+  Future<bool> _requestLocationPermission(BuildContext context) async {
     String message;
     Duration duration;
     if (await Permission.locationWhenInUse.shouldShowRequestRationale) {
@@ -398,8 +322,7 @@ class _ListViewState extends State<ListView>
     }
   }
 
-  Future<bool> _requestNotificationPermission(
-      {required BuildContext context}) async {
+  Future<bool> _requestNotificationPermission(BuildContext context) async {
     String message;
     Duration duration;
     if (await Permission.notification.shouldShowRequestRationale) {
@@ -461,18 +384,17 @@ class _ListViewState extends State<ListView>
       );
 
       // Sign in
-      await FirebaseAuth.instance
-          .signInWithCredential(credential)
-          .then((authResult) {
-        final user = authResult.user;
-        if (user != null) {
-          message =
-              "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
-          _logSignedIn();
-        } else {
-          message = "error on sign-in";
-        }
-      });
+      final authResult =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final user = authResult.user;
+      if (user != null) {
+        message =
+            "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
+        _logSignedIn();
+      } else {
+        message = "error on sign-in";
+      }
     }
 
     if (context.mounted) {
@@ -530,15 +452,10 @@ class _ListViewState extends State<ListView>
   }
 
   _retrieveActivities() async {
-    if (!_isSignedIn()) {
-      setState(() {
-        _currentActivityId = null;
-        _activities = [];
-      });
-      return;
-    }
+    var activities = _isSignedIn()
+        ? await ActivityRepo.instance.latestN(50)
+        : <ActivityModel>[];
 
-    var activities = await ActivityRepo.instance.latestN(50);
     setState(() {
       _activities = activities;
       _currentActivityId =
@@ -547,7 +464,7 @@ class _ListViewState extends State<ListView>
 
     if (!mounted) return;
 
-    if (_currentActivityId != null && _currentActivityId != "") {
+    if (_currentActivityId != null) {
       await _startLocationService(context: context);
     } else {
       await _stopLocationService(context: context);
