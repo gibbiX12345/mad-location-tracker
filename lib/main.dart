@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:background_location/background_location.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,6 +10,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mad_location_tracker/app_bar.dart';
 import 'package:mad_location_tracker/firebase_options.dart';
 import 'package:mad_location_tracker/map.dart';
+import 'package:mad_location_tracker/models/activity_model.dart';
+import 'package:mad_location_tracker/models/location_model.dart';
+import 'package:mad_location_tracker/repos/activity_repo.dart';
+import 'package:mad_location_tracker/repos/location_repo.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
@@ -56,7 +59,7 @@ class _ListViewState extends State<ListView>
   User? _user;
   String? _currentActivityId;
 
-  var _activities = [];
+  var _activities = <ActivityModel>[];
 
   @override
   void initState() {
@@ -148,7 +151,7 @@ class _ListViewState extends State<ListView>
           if (_currentActivityId == null) {
             _requestNameAndStartNewActivity(context);
           } else {
-            _showMapView(context, "");
+            _showMapView(context);
           }
         },
         tooltip: 'Add a new activity',
@@ -162,7 +165,7 @@ class _ListViewState extends State<ListView>
   List<Widget> _activityList() {
     List<Widget> list = _activities.map((activity) {
       final renameFieldController = TextEditingController();
-      renameFieldController.text = activity["name"];
+      renameFieldController.text = activity.name;
       return ListTile(
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -183,13 +186,13 @@ class _ListViewState extends State<ListView>
           ],
         ),
         title: Text(
-          activity["name"] + (activity["isActive"] ? " (active)" : ""),
-          style: activity["isActive"]
+          activity.name + (activity.isActive ? " (active)" : ""),
+          style: activity.isActive
               ? const TextStyle(fontWeight: FontWeight.bold)
               : null,
         ),
-        subtitle: Text(activity["time"]),
-        onTap: () => {_showMapView(context, activity["id"])},
+        subtitle: Text(activity.time.toString()),
+        onTap: () => _showMapView(context, activityId: activity.id),
       ) as Widget;
     }).toList();
     list.add(Container(height: 80.0));
@@ -201,7 +204,7 @@ class _ListViewState extends State<ListView>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Rename \"${activity["name"]}\"?"),
+        title: Text("Rename \"${activity.name}\"?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -209,7 +212,7 @@ class _ListViewState extends State<ListView>
           ),
           TextButton(
             onPressed: () {
-              _updateActivity(activity["id"], renameFieldController.text);
+              _updateActivity(activity.id, renameFieldController.text);
               Navigator.pop(context);
             },
             child: const Text("Save"),
@@ -229,7 +232,7 @@ class _ListViewState extends State<ListView>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Delete \"${activity["name"]}\"?"),
+        title: Text("Delete \"${activity.name}\"?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -237,7 +240,7 @@ class _ListViewState extends State<ListView>
           ),
           TextButton(
             onPressed: () {
-              _deleteActivity(activity["id"]);
+              _deleteActivity(activity.id);
               Navigator.pop(context);
             },
             child: const Text("Delete forever"),
@@ -277,17 +280,16 @@ class _ListViewState extends State<ListView>
         return;
       }
 
-      var db = FirebaseFirestore.instance;
-      var activityMap = <String, dynamic>{
-        "name": activityName,
-        "isActive": true,
-        "time": DateTime.now().toString(),
-        "userUid": FirebaseAuth.instance.currentUser?.uid
-      };
-      db.collection("activities").add(activityMap);
+      ActivityRepo.instance.insert(ActivityModel(
+        name: activityName,
+        time: DateTime.now().toString(),
+        isActive: true,
+      ));
       _logNewActivity();
     }
-    _showMapView(context, "");
+    if (context.mounted) {
+      _showMapView(context);
+    }
     _retrieveActivities();
   }
 
@@ -324,16 +326,12 @@ class _ListViewState extends State<ListView>
   }
 
   _updateActivity(String activityId, String newName) async {
-    var db = FirebaseFirestore.instance;
-    final ref = db.collection("activities").doc(activityId);
-    await ref.update({"name": newName});
+    ActivityRepo.instance.setName(activityId, newName);
     _retrieveActivities();
   }
 
   _deleteActivity(String activityId) async {
-    var db = FirebaseFirestore.instance;
-    final ref = db.collection("activities").doc(activityId);
-    await ref.delete();
+    ActivityRepo.instance.delete(activityId);
     _retrieveActivities();
   }
 
@@ -341,11 +339,12 @@ class _ListViewState extends State<ListView>
     FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
   }
 
-  _showMapView(BuildContext context, String activityId) {
+  _showMapView(BuildContext context, {String? activityId}) {
     if (context.mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => MapView(activity: activityId)),
+        MaterialPageRoute(
+            builder: (context) => MapView(activityId: activityId)),
       );
     }
   }
@@ -526,20 +525,8 @@ class _ListViewState extends State<ListView>
   }
 
   _saveNewLocation(Location location) async {
-    var db = FirebaseFirestore.instance;
-    var locationMap = <String, dynamic>{
-      "latitude": location.latitude.toString(),
-      "longitude": location.longitude.toString(),
-      "altitude": location.altitude.toString(),
-      "accuracy": location.accuracy.toString(),
-      "bearing": location.bearing.toString(),
-      "speed": location.speed.toString(),
-      "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
-          .toString(),
-      "userUid": FirebaseAuth.instance.currentUser?.uid,
-      "activityUid": _currentActivityId
-    };
-    db.collection("locations").add(locationMap);
+    await LocationRepo.instance.insert(
+        LocationModel.fromBackgroundLocation(location, _currentActivityId!));
   }
 
   _retrieveActivities() async {
@@ -551,28 +538,11 @@ class _ListViewState extends State<ListView>
       return;
     }
 
-    var db = FirebaseFirestore.instance;
-    var snapshot = await db
-        .collection("activities")
-        .where("userUid",
-            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .orderBy("time", descending: true)
-        .limit(50)
-        .get();
-
-    var activities = snapshot.docs;
+    var activities = await ActivityRepo.instance.latestN(50);
     setState(() {
-      _activities = activities.map((activity) {
-        return {
-          "id": activity.id,
-          "name": activity["name"],
-          "time": activity["time"],
-          "isActive": activity["isActive"]
-        };
-      }).toList();
-
+      _activities = activities;
       _currentActivityId =
-          activities.where((activity) => activity["isActive"]).firstOrNull?.id;
+          _activities.where((activity) => activity.isActive).firstOrNull?.id;
     });
 
     if (!mounted) return;

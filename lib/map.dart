@@ -1,27 +1,28 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mad_location_tracker/app_bar.dart';
+import 'package:mad_location_tracker/models/location_model.dart';
+import 'package:mad_location_tracker/repos/activity_repo.dart';
+import 'package:mad_location_tracker/repos/location_repo.dart';
 
 class MapView extends StatelessWidget {
-  const MapView({super.key, required this.activity});
+  const MapView({super.key, this.activityId});
 
-  final String activity;
+  final String? activityId;
 
   @override
   Widget build(BuildContext context) {
-    return MapSample(activity: activity);
+    return MapSample(activityId: activityId);
   }
 }
 
 class MapSample extends StatefulWidget {
-  const MapSample({super.key, required this.activity});
+  const MapSample({super.key, this.activityId});
 
-  final String activity;
+  final String? activityId;
 
   @override
   State<MapSample> createState() => MapSampleState();
@@ -31,7 +32,6 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   static late Completer<GoogleMapController> _controllerCompleter;
   late GoogleMapController _controller;
   Timer? _timer;
-  final FirebaseFirestore db = FirebaseFirestore.instance;
   Set<Marker> _markers = {};
 
   @override
@@ -51,10 +51,10 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
     }
     setState(() {
       _markers = Set.from(locations.map((entry) => Marker(
-            markerId: MarkerId(entry['time']),
-            infoWindow: InfoWindow(title: entry['time']),
-            position: LatLng(double.parse(entry['latitude']),
-                double.parse(entry['longitude'])),
+            markerId: MarkerId(entry.time),
+            infoWindow: InfoWindow(title: entry.time),
+            position: LatLng(
+                double.parse(entry.latitude), double.parse(entry.longitude)),
           )));
       _setInitialCameraPosition(_controller);
     });
@@ -149,36 +149,16 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
         CameraUpdate.newLatLngBounds(bounds, 50)); // 50 is padding
   }
 
-  _getLocations() async {
-    var currentActivity = widget.activity;
-    if (currentActivity == "") {
-      currentActivity = await _getCurrentActivity();
+  Future<List<LocationModel>> _getLocations() async {
+    var currentActivity = widget.activityId ?? await _getCurrentActivity();
+    if (currentActivity == null) {
+      return [];
     }
-    var snapshot = await db
-        .collection("locations")
-        .where("userUid",
-            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .where("activityUid", isEqualTo: "$currentActivity")
-        .get();
-
-    return snapshot.docs.map((doc) => doc.data()).toList();
+    return LocationRepo.instance.byActivityId(currentActivity);
   }
 
-  _getCurrentActivity() async {
-    var db = FirebaseFirestore.instance;
-    var snapshot = await db
-        .collection("activities")
-        .where("userUid",
-            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .where("isActive", isEqualTo: true)
-        .get();
-
-    var activities = snapshot.docs;
-    if (activities.isNotEmpty) {
-      return activities.first.id;
-    } else {
-      return "";
-    }
+  Future<String?> _getCurrentActivity() async {
+    return ActivityRepo.instance.currentlyActiveId();
   }
 
   _finishActivity() {
@@ -187,13 +167,13 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
 
   _finishActivityStuff() async {
     var currentActivity = await _getCurrentActivity();
-    if (currentActivity != "") {
-      var db = FirebaseFirestore.instance;
-      final ref = db.collection("activities").doc(currentActivity);
-      await ref.update({"isActive": false});
+    if (currentActivity != null) {
+      await ActivityRepo.instance.setActive(currentActivity, false);
       _logFinishedActivity();
     }
-    Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   _logFinishedActivity() {
