@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -23,7 +25,20 @@ class LocationRepo {
         .where("activityUid", isEqualTo: activityUid)
         .orderBy("time", descending: false)
         .get();
-    return snapshot.docs.map((doc) => LocationModel.fromDoc(doc)).toList();
+    return snapshot.docs.map(LocationModel.fromDoc).toList();
+  }
+
+  StreamSubscription<dynamic> listenByActivityId(
+    String activityUid,
+    void Function(List<LocationModel> locations) onData,
+  ) {
+    return _collection
+        .where("userUid", isEqualTo: _auth.currentUser?.uid)
+        .where("activityUid", isEqualTo: activityUid)
+        .orderBy("time", descending: false)
+        .snapshots()
+        .listen((change) => onData(
+            change.docs.map(LocationModel.fromDoc).toList()));
   }
 
   static LocationRepo get instance => _instance ??=

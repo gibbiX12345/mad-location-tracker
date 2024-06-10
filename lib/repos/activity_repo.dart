@@ -32,8 +32,9 @@ class ActivityRepo {
     return snapshot.docs.firstOrNull?.id;
   }
 
-  Future<void> insert(ActivityModel activityModel) async {
-    await _collection.add(activityModel.data());
+  Future<String> insert(ActivityModel activityModel) async {
+    var ref = await _collection.add(activityModel.data());
+    return ref.id;
   }
 
   Future<void> setActive(String id, bool active) async {

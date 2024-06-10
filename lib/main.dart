@@ -128,8 +128,7 @@ class _ListViewState extends State<ListView>
             Expanded(
               child: ActivityList(
                 padding: const EdgeInsets.only(bottom: 80),
-                onOpen: (activity) =>
-                    _showMapView(context, activityId: activity.id),
+                onOpen: (activity) => _showMapView(context, activity.id),
                 onRename: (activity) => _showRenameActivityDialog(activity),
                 onDelete: (activity) => _showDeleteActivityDialog(activity),
                 activities: _activities,
@@ -145,8 +144,8 @@ class _ListViewState extends State<ListView>
   FloatingActionButton _buildFloatingActionButton(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () => _currentActivityId == null
-          ? _requestNameAndStartNewActivity(context)
-          : _showMapView(context),
+          ? _requestNameAndStartNewActivity()
+          : _showMapView(context, _currentActivityId!),
       tooltip: 'Add a new activity',
       label: _currentActivityId == null
           ? const Row(children: [Icon(Icons.add), Text('Activity')])
@@ -195,7 +194,7 @@ class _ListViewState extends State<ListView>
     return _user != null;
   }
 
-  _startNewActivity(BuildContext context, String activityName) async {
+  _startNewActivity(String activityName) async {
     if (_currentActivityId == null) {
       if (FirebaseAuth.instance.currentUser == null) {
         _reportNotLoggedIn();
@@ -206,20 +205,20 @@ class _ListViewState extends State<ListView>
         return;
       }
 
-      ActivityRepo.instance.insert(ActivityModel(
+      _currentActivityId = await ActivityRepo.instance.insert(ActivityModel(
         name: activityName,
         time: DateTime.now().toString(),
         isActive: true,
       ));
-      _logNewActivity();
+      await _logNewActivity();
     }
-    if (context.mounted) {
-      _showMapView(context);
+    if (mounted) {
+      _showMapView(context, _currentActivityId!);
     }
     _retrieveActivities();
   }
 
-  _requestNameAndStartNewActivity(BuildContext context) {
+  _requestNameAndStartNewActivity() {
     final activityNameController = TextEditingController();
     showDialog(
       context: context,
@@ -233,7 +232,7 @@ class _ListViewState extends State<ListView>
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _startNewActivity(context, activityNameController.text);
+              _startNewActivity(activityNameController.text);
             },
             child: const Text("Create"),
           )
@@ -261,11 +260,11 @@ class _ListViewState extends State<ListView>
     _retrieveActivities();
   }
 
-  _logNewActivity() {
-    FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  Future<void> _logNewActivity() async {
+    await FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
   }
 
-  _showMapView(BuildContext context, {String? activityId}) {
+  _showMapView(BuildContext context, String activityId) {
     if (context.mounted) {
       Navigator.push(
         context,

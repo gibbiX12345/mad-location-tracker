@@ -9,9 +9,9 @@ import 'package:mad_location_tracker/repos/activity_repo.dart';
 import 'package:mad_location_tracker/repos/location_repo.dart';
 
 class MapView extends StatelessWidget {
-  const MapView({super.key, this.activityId});
+  const MapView({super.key, required this.activityId});
 
-  final String? activityId;
+  final String activityId;
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +20,9 @@ class MapView extends StatelessWidget {
 }
 
 class MapSample extends StatefulWidget {
-  const MapSample({super.key, this.activityId});
+  const MapSample({super.key, required this.activityId});
 
-  final String? activityId;
+  final String activityId;
 
   @override
   State<MapSample> createState() => MapSampleState();
@@ -31,26 +31,25 @@ class MapSample extends StatefulWidget {
 class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   static late Completer<GoogleMapController> _controllerCompleter;
   late GoogleMapController _controller;
-  Timer? _timer;
   Set<Polyline>? _polylines;
+
+  StreamSubscription<dynamic>? _locationSubscription;
 
   @override
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     _controllerCompleter = Completer<GoogleMapController>();
-    _fetchLocations();
-    _timer = Timer.periodic(
-        const Duration(seconds: 15), (Timer t) => _fetchLocations());
+    _locationSubscription = _subscribeToLocations();
     super.initState();
   }
 
-  Future<void> _fetchLocations() async {
+  StreamSubscription<dynamic> _subscribeToLocations() => LocationRepo.instance
+      .listenByActivityId(widget.activityId, (locations) => _onUpdateLocations(locations));
+
+  Future<void> _onUpdateLocations(List<LocationModel> locations) async {
     var lineColor = Theme.of(context).colorScheme.inversePrimary;
 
-    var locations = await _getLocations();
-    if (!_controllerCompleter.isCompleted) {
-      _controller = await _controllerCompleter.future;
-    }
+    _controller = await _controllerCompleter.future;
 
     var polyline = Polyline(
       polylineId: const PolylineId("path"),
@@ -74,7 +73,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _locationSubscription?.cancel().ignore();
     super.dispose();
   }
 
@@ -82,12 +81,10 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused) {
-      _timer?.cancel();
+      _locationSubscription?.cancel().ignore();
     } else if (state == AppLifecycleState.resumed) {
-      _fetchLocations();
-      _timer?.cancel();
-      _timer = Timer.periodic(
-          const Duration(seconds: 15), (Timer t) => _fetchLocations());
+      _locationSubscription?.cancel().ignore();
+      _locationSubscription = _subscribeToLocations();
     }
   }
 
