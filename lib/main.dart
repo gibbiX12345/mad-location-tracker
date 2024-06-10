@@ -144,7 +144,13 @@ class _ListViewState extends State<ListView>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => {_startNewActivity(context)},
+        onPressed: () {
+          if (_currentActivityId == null) {
+            _requestNameAndStartNewActivity(context);
+          } else {
+            _showMapView(context, "");
+          }
+        },
         tooltip: 'Add a new activity',
         label: _currentActivityId == null
             ? const Row(children: [Icon(Icons.add), Text('Activity')])
@@ -155,36 +161,21 @@ class _ListViewState extends State<ListView>
 
   List<Widget> _activityList() {
     List<Widget> list = _activities.map((activity) {
+      final renameFieldController = TextEditingController();
+      renameFieldController.text = activity["name"];
       return ListTile(
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              onPressed: () {},
+              onPressed: () {
+                _showRenameActivityDialog(activity, renameFieldController);
+              },
               icon: const Icon(Icons.edit),
             ),
             IconButton(
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text("Delete \"${activity["name"]}\"?"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Cancel"),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Delete forever"),
-                      )
-                    ],
-                    content: const SingleChildScrollView(
-                      child: Text(
-                          "Do you really want to delete this activity? This can't be undone."),
-                    ),
-                  ),
-                );
+                _showDeleteActivityDialog(activity);
               },
               icon: const Icon(Icons.delete_forever),
               color: Colors.red,
@@ -193,13 +184,71 @@ class _ListViewState extends State<ListView>
         ),
         title: Text(
           activity["name"] + (activity["isActive"] ? " (active)" : ""),
-          style: activity["isActive"] ? const TextStyle(fontWeight: FontWeight.bold) : null,
+          style: activity["isActive"]
+              ? const TextStyle(fontWeight: FontWeight.bold)
+              : null,
         ),
         subtitle: Text(activity["time"]),
+        onTap: () => {_showMapView(context, activity["id"])},
       ) as Widget;
     }).toList();
     list.add(Container(height: 80.0));
     return list;
+  }
+
+  void _showRenameActivityDialog(
+      activity, TextEditingController renameFieldController) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Rename \"${activity["name"]}\"?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              _updateActivity(activity["id"], renameFieldController.text);
+              Navigator.pop(context);
+            },
+            child: const Text("Save"),
+          )
+        ],
+        content: SingleChildScrollView(
+          child: TextFormField(
+            autofocus: true,
+            controller: renameFieldController,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteActivityDialog(activity) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete \"${activity["name"]}\"?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              _deleteActivity(activity["id"]);
+              Navigator.pop(context);
+            },
+            child: const Text("Delete forever"),
+          )
+        ],
+        content: const SingleChildScrollView(
+          child: Text(
+              "Do you really want to delete this activity? This can't be undone."),
+        ),
+      ),
+    );
   }
 
   _onAuthStateChange(User? user) {
@@ -217,7 +266,7 @@ class _ListViewState extends State<ListView>
     return _user != null;
   }
 
-  _startNewActivity(BuildContext context) async {
+  _startNewActivity(BuildContext context, String activityName) async {
     if (_currentActivityId == null) {
       if (FirebaseAuth.instance.currentUser == null) {
         _reportNotLoggedIn();
@@ -230,7 +279,7 @@ class _ListViewState extends State<ListView>
 
       var db = FirebaseFirestore.instance;
       var activityMap = <String, dynamic>{
-        "name": "My Activity",
+        "name": activityName,
         "isActive": true,
         "time": DateTime.now().toString(),
         "userUid": FirebaseAuth.instance.currentUser?.uid
@@ -238,18 +287,67 @@ class _ListViewState extends State<ListView>
       db.collection("activities").add(activityMap);
       _logNewActivity();
     }
+    _showMapView(context, "");
+    _retrieveActivities();
+  }
 
-    if (context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const MapView()),
-      );
-    }
+  _requestNameAndStartNewActivity(BuildContext context) {
+    final activityNameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("New Activity"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startNewActivity(context, activityNameController.text);
+            },
+            child: const Text("Create"),
+          )
+        ],
+        content: SingleChildScrollView(
+          child: TextFormField(
+            autofocus: true,
+            decoration: const InputDecoration(
+                hintText: 'Enter activity name',
+                border: UnderlineInputBorder()),
+            controller: activityNameController,
+          ),
+        ),
+      ),
+    );
+  }
+
+  _updateActivity(String activityId, String newName) async {
+    var db = FirebaseFirestore.instance;
+    final ref = db.collection("activities").doc(activityId);
+    await ref.update({"name": newName});
+    _retrieveActivities();
+  }
+
+  _deleteActivity(String activityId) async {
+    var db = FirebaseFirestore.instance;
+    final ref = db.collection("activities").doc(activityId);
+    await ref.delete();
     _retrieveActivities();
   }
 
   _logNewActivity() {
     FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  }
+
+  _showMapView(BuildContext context, String activityId) {
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => MapView(activity: activityId)),
+      );
+    }
   }
 
   Future<bool> _requestPermissions({required BuildContext context}) async {
@@ -479,7 +577,7 @@ class _ListViewState extends State<ListView>
 
     if (!mounted) return;
 
-    if (activities.isNotEmpty) {
+    if (_currentActivityId != null && _currentActivityId != "") {
       await _startLocationService(context: context);
     } else {
       await _stopLocationService(context: context);
