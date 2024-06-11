@@ -31,7 +31,8 @@ class MapSample extends StatefulWidget {
 class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   static late Completer<GoogleMapController> _controllerCompleter;
   late GoogleMapController _controller;
-  Set<Polyline>? _polylines;
+  Set<Polyline> _polylines = {};
+  Set<Marker> _markers = {};
 
   StreamSubscription<dynamic>? _locationSubscription;
 
@@ -43,31 +44,56 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
     super.initState();
   }
 
-  StreamSubscription<dynamic> _subscribeToLocations() => LocationRepo.instance
-      .listenByActivityId(widget.activityId, (locations) => _onUpdateLocations(locations));
+  StreamSubscription<dynamic> _subscribeToLocations() =>
+      LocationRepo.instance.listenByActivityId(
+          widget.activityId, (locations) => _onUpdateLocations(locations));
 
   Future<void> _onUpdateLocations(List<LocationModel> locations) async {
     var lineColor = Theme.of(context).colorScheme.inversePrimary;
 
     _controller = await _controllerCompleter.future;
 
-    var polyline = Polyline(
-      polylineId: const PolylineId("path"),
-      color: lineColor,
-      startCap: Cap.roundCap,
-      endCap: Cap.roundCap,
-      jointType: JointType.round,
-      width: 5,
-      points: locations
-          .map((entry) => LatLng(
-              double.parse(entry.latitude), double.parse(entry.longitude)))
-          .toList(),
-    );
+    var markers = _createMarkers(locations);
+
+    var polylines = {
+      Polyline(
+        polylineId: const PolylineId("path"),
+        color: lineColor,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+        jointType: JointType.round,
+        width: 5,
+        points: locations.map((entry) => entry.toLatLng()).toList(),
+      )
+    };
 
     setState(() {
-      _polylines = {polyline};
+      _polylines = polylines;
+      _markers = markers;
       _setInitialCameraPosition(_controller);
     });
+  }
+
+  Set<Marker> _createMarkers(List<LocationModel> locations) {
+    if (locations.isEmpty) return {};
+    if (locations.length == 1) return {_startMarker(locations.first)};
+    return {_startMarker(locations.first), _endMarker(locations.last)};
+  }
+
+  Marker _startMarker(LocationModel start) {
+    return Marker(
+      markerId: const MarkerId("start"),
+      position: start.toLatLng(),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+    );
+  }
+
+  Marker _endMarker(LocationModel start) {
+    return Marker(
+      markerId: const MarkerId("end"),
+      position: start.toLatLng(),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+    );
   }
 
   @override
@@ -106,7 +132,8 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
               }
               _controller = controller;
             },
-            polylines: _polylines ?? {},
+            polylines: _polylines,
+            markers: _markers,
             compassEnabled: true,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
@@ -127,9 +154,9 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   }
 
   void _setInitialCameraPosition(GoogleMapController controller) {
-    if (_polylines?.isNotEmpty ?? false) {
+    if (_polylines.isNotEmpty) {
       LatLngBounds bounds = calculateBounds(
-        _polylines?.expand((polyline) => polyline.points).toList() ?? [],
+        _polylines.expand((polyline) => polyline.points).toList(),
       );
       moveCameraToFitBounds(controller, bounds);
     }

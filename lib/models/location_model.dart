@@ -1,6 +1,7 @@
 import 'package:background_location/background_location.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class LocationModel {
   String latitude;
@@ -35,6 +36,10 @@ class LocationModel {
         time = DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
             .toString(),
         userUid = (user ?? FirebaseAuth.instance.currentUser!).uid;
+
+  LatLng toLatLng() {
+    return LatLng(double.parse(latitude), double.parse(longitude));
+  }
 
   Map<String, dynamic> data() => <String, dynamic>{
         "latitude": latitude,
