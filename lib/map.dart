@@ -1,27 +1,28 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mad_location_tracker/app_bar.dart';
+import 'package:mad_location_tracker/models/location_model.dart';
+import 'package:mad_location_tracker/repos/activity_repo.dart';
+import 'package:mad_location_tracker/repos/location_repo.dart';
 
 class MapView extends StatelessWidget {
-  const MapView({super.key, required this.activity});
+  const MapView({super.key, required this.activityId});
 
-  final String activity;
+  final String activityId;
 
   @override
   Widget build(BuildContext context) {
-    return MapSample(activity: activity);
+    return MapSample(activityId: activityId);
   }
 }
 
 class MapSample extends StatefulWidget {
-  const MapSample({super.key, required this.activity});
+  const MapSample({super.key, required this.activityId});
 
-  final String activity;
+  final String activityId;
 
   @override
   State<MapSample> createState() => MapSampleState();
@@ -30,40 +31,75 @@ class MapSample extends StatefulWidget {
 class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   static late Completer<GoogleMapController> _controllerCompleter;
   late GoogleMapController _controller;
-  Timer? _timer;
-  final FirebaseFirestore db = FirebaseFirestore.instance;
+  Set<Polyline> _polylines = {};
   Set<Marker> _markers = {};
+
+  StreamSubscription<dynamic>? _locationSubscription;
 
   @override
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     _controllerCompleter = Completer<GoogleMapController>();
-    _fetchLocations();
-    _timer = Timer.periodic(
-        const Duration(seconds: 15), (Timer t) => _fetchLocations());
+    _locationSubscription = _subscribeToLocations();
     super.initState();
   }
 
-  Future<void> _fetchLocations() async {
-    var locations = await _getLocations();
-    if (!_controllerCompleter.isCompleted) {
-      _controller = await _controllerCompleter.future;
-    }
+  StreamSubscription<dynamic> _subscribeToLocations() =>
+      LocationRepo.instance.listenByActivityId(
+          widget.activityId, (locations) => _onUpdateLocations(locations));
+
+  Future<void> _onUpdateLocations(List<LocationModel> locations) async {
+    var lineColor = Theme.of(context).colorScheme.inversePrimary;
+
+    _controller = await _controllerCompleter.future;
+
+    var markers = _createMarkers(locations);
+
+    var polylines = {
+      Polyline(
+        polylineId: const PolylineId("path"),
+        color: lineColor,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+        jointType: JointType.round,
+        width: 5,
+        points: locations.map((entry) => entry.toLatLng()).toList(),
+      )
+    };
+
     setState(() {
-      _markers = Set.from(locations.map((entry) => Marker(
-            markerId: MarkerId(entry['time']),
-            infoWindow: InfoWindow(title: entry['time']),
-            position: LatLng(double.parse(entry['latitude']),
-                double.parse(entry['longitude'])),
-          )));
+      _polylines = polylines;
+      _markers = markers;
       _setInitialCameraPosition(_controller);
     });
+  }
+
+  Set<Marker> _createMarkers(List<LocationModel> locations) {
+    if (locations.isEmpty) return {};
+    if (locations.length == 1) return {_startMarker(locations.first)};
+    return {_startMarker(locations.first), _endMarker(locations.last)};
+  }
+
+  Marker _startMarker(LocationModel start) {
+    return Marker(
+      markerId: const MarkerId("start"),
+      position: start.toLatLng(),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+    );
+  }
+
+  Marker _endMarker(LocationModel start) {
+    return Marker(
+      markerId: const MarkerId("end"),
+      position: start.toLatLng(),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _locationSubscription?.cancel().ignore();
     super.dispose();
   }
 
@@ -71,12 +107,10 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused) {
-      _timer?.cancel();
+      _locationSubscription?.cancel().ignore();
     } else if (state == AppLifecycleState.resumed) {
-      _fetchLocations();
-      _timer?.cancel();
-      _timer = Timer.periodic(
-          const Duration(seconds: 15), (Timer t) => _fetchLocations());
+      _locationSubscription?.cancel().ignore();
+      _locationSubscription = _subscribeToLocations();
     }
   }
 
@@ -98,6 +132,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
               }
               _controller = controller;
             },
+            polylines: _polylines,
             markers: _markers,
             compassEnabled: true,
             myLocationEnabled: true,
@@ -119,23 +154,22 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   }
 
   void _setInitialCameraPosition(GoogleMapController controller) {
-    if (_markers.isNotEmpty) {
-      LatLngBounds bounds = calculateBounds(_markers);
+    if (_polylines.isNotEmpty) {
+      LatLngBounds bounds = calculateBounds(
+        _polylines.expand((polyline) => polyline.points).toList(),
+      );
       moveCameraToFitBounds(controller, bounds);
     }
   }
 
-  LatLngBounds calculateBounds(Set<Marker> markers) {
-    double southWestLat =
-        markers.map((m) => m.position.latitude).reduce((a, b) => a < b ? a : b);
-    double southWestLng = markers
-        .map((m) => m.position.longitude)
-        .reduce((a, b) => a < b ? a : b);
-    double northEastLat =
-        markers.map((m) => m.position.latitude).reduce((a, b) => a > b ? a : b);
-    double northEastLng = markers
-        .map((m) => m.position.longitude)
-        .reduce((a, b) => a > b ? a : b);
+  LatLngBounds calculateBounds(List<LatLng> markers) {
+    final latitudes = markers.map((element) => element.latitude).toList();
+    final longitudes = markers.map((element) => element.longitude).toList();
+
+    final southWestLat = latitudes.reduce((a, b) => a < b ? a : b);
+    final southWestLng = longitudes.reduce((a, b) => a < b ? a : b);
+    final northEastLat = latitudes.reduce((a, b) => a > b ? a : b);
+    final northEastLng = longitudes.reduce((a, b) => a > b ? a : b);
 
     return LatLngBounds(
       southwest: LatLng(southWestLat, southWestLng),
@@ -149,36 +183,16 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
         CameraUpdate.newLatLngBounds(bounds, 50)); // 50 is padding
   }
 
-  _getLocations() async {
-    var currentActivity = widget.activity;
-    if (currentActivity == "") {
-      currentActivity = await _getCurrentActivity();
+  Future<List<LocationModel>> _getLocations() async {
+    var currentActivity = widget.activityId ?? await _getCurrentActivity();
+    if (currentActivity == null) {
+      return [];
     }
-    var snapshot = await db
-        .collection("locations")
-        .where("userUid",
-            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .where("activityUid", isEqualTo: "$currentActivity")
-        .get();
-
-    return snapshot.docs.map((doc) => doc.data()).toList();
+    return LocationRepo.instance.byActivityId(currentActivity);
   }
 
-  _getCurrentActivity() async {
-    var db = FirebaseFirestore.instance;
-    var snapshot = await db
-        .collection("activities")
-        .where("userUid",
-            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .where("isActive", isEqualTo: true)
-        .get();
-
-    var activities = snapshot.docs;
-    if (activities.isNotEmpty) {
-      return activities.first.id;
-    } else {
-      return "";
-    }
+  Future<String?> _getCurrentActivity() async {
+    return ActivityRepo.instance.currentlyActiveId();
   }
 
   _finishActivity() {
@@ -187,13 +201,13 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
 
   _finishActivityStuff() async {
     var currentActivity = await _getCurrentActivity();
-    if (currentActivity != "") {
-      var db = FirebaseFirestore.instance;
-      final ref = db.collection("activities").doc(currentActivity);
-      await ref.update({"isActive": false});
+    if (currentActivity != null) {
+      await ActivityRepo.instance.setActive(currentActivity, false);
       _logFinishedActivity();
     }
-    Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   _logFinishedActivity() {

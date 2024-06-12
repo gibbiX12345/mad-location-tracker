@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:background_location/background_location.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,6 +10,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mad_location_tracker/app_bar.dart';
 import 'package:mad_location_tracker/firebase_options.dart';
 import 'package:mad_location_tracker/map.dart';
+import 'package:mad_location_tracker/models/activity_model.dart';
+import 'package:mad_location_tracker/models/location_model.dart';
+import 'package:mad_location_tracker/repos/activity_repo.dart';
+import 'package:mad_location_tracker/repos/location_repo.dart';
+import 'package:mad_location_tracker/widgets/activity_delete_dialog.dart';
+import 'package:mad_location_tracker/widgets/activity_list.dart';
+import 'package:mad_location_tracker/widgets/activity_rename_dialog.dart';
+import 'package:mad_location_tracker/widgets/sign_in_form.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
@@ -56,7 +63,7 @@ class _ListViewState extends State<ListView>
   User? _user;
   String? _currentActivityId;
 
-  var _activities = [];
+  var _activities = <ActivityModel>[];
 
   @override
   void initState() {
@@ -112,115 +119,50 @@ class _ListViewState extends State<ListView>
           children: <Widget>[
             Padding(
               padding: const EdgeInsets.all(18.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _isSignedIn()
-                      ? Text("Signed in as ${_user?.displayName}")
-                      : const Text("Not signed in"),
-                  ElevatedButton(
-                      onPressed: () {
-                        if (_isSignedIn()) {
-                          _signOut(context: context);
-                        } else {
-                          _signInWithGoogle(context: context);
-                        }
-                      },
-                      child: _isSignedIn()
-                          ? const Text("Sign out")
-                          : const Text("Sign in with Google")),
-                ],
+              child: SignInForm(
+                onSignOut: () => _signOut(context: context),
+                onSignIn: () => _signInWithGoogle(context: context),
+                user: _user,
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: _activityList(),
-                ),
+              child: ActivityList(
+                padding: const EdgeInsets.only(bottom: 80),
+                onOpen: (activity) => _showMapView(context, activity.id),
+                onRename: (activity) => _showRenameActivityDialog(activity),
+                onDelete: (activity) => _showDeleteActivityDialog(activity),
+                activities: _activities,
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          if (_currentActivityId == null) {
-            _requestNameAndStartNewActivity(context);
-          } else {
-            _showMapView(context, "");
-          }
-        },
-        tooltip: 'Add a new activity',
-        label: _currentActivityId == null
-            ? const Row(children: [Icon(Icons.add), Text('Activity')])
-            : const Text('Resume Activity'),
-      ),
+      floatingActionButton: _buildFloatingActionButton(context),
     );
   }
 
-  List<Widget> _activityList() {
-    List<Widget> list = _activities.map((activity) {
-      final renameFieldController = TextEditingController();
-      renameFieldController.text = activity["name"];
-      return ListTile(
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () {
-                _showRenameActivityDialog(activity, renameFieldController);
-              },
-              icon: const Icon(Icons.edit),
-            ),
-            IconButton(
-              onPressed: () {
-                _showDeleteActivityDialog(activity);
-              },
-              icon: const Icon(Icons.delete_forever),
-              color: Colors.red,
-            ),
-          ],
-        ),
-        title: Text(
-          activity["name"] + (activity["isActive"] ? " (active)" : ""),
-          style: activity["isActive"]
-              ? const TextStyle(fontWeight: FontWeight.bold)
-              : null,
-        ),
-        subtitle: Text(activity["time"]),
-        onTap: () => {_showMapView(context, activity["id"])},
-      ) as Widget;
-    }).toList();
-    list.add(Container(height: 80.0));
-    return list;
+  FloatingActionButton _buildFloatingActionButton(BuildContext context) {
+    return FloatingActionButton.extended(
+      onPressed: () => _currentActivityId == null
+          ? _requestNameAndStartNewActivity()
+          : _showMapView(context, _currentActivityId!),
+      tooltip: 'Add a new activity',
+      label: _currentActivityId == null
+          ? const Row(children: [Icon(Icons.add), Text('Activity')])
+          : const Text('Resume Activity'),
+    );
   }
 
-  void _showRenameActivityDialog(
-      activity, TextEditingController renameFieldController) {
+  void _showRenameActivityDialog(ActivityModel activity) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Rename \"${activity["name"]}\"?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              _updateActivity(activity["id"], renameFieldController.text);
-              Navigator.pop(context);
-            },
-            child: const Text("Save"),
-          )
-        ],
-        content: SingleChildScrollView(
-          child: TextFormField(
-            autofocus: true,
-            controller: renameFieldController,
-          ),
-        ),
+      builder: (context) => ActivityRenameDialog(
+        onCancel: () => Navigator.pop(context),
+        onRename: (newName) {
+          _updateActivity(activity.id, newName);
+          Navigator.pop(context);
+        },
+        activity: activity,
       ),
     );
   }
@@ -228,33 +170,19 @@ class _ListViewState extends State<ListView>
   void _showDeleteActivityDialog(activity) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Delete \"${activity["name"]}\"?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              _deleteActivity(activity["id"]);
-              Navigator.pop(context);
-            },
-            child: const Text("Delete forever"),
-          )
-        ],
-        content: const SingleChildScrollView(
-          child: Text(
-              "Do you really want to delete this activity? This can't be undone."),
-        ),
+      builder: (context) => ActivityDeleteDialog(
+        activity: activity,
+        onCancel: () => Navigator.pop(context),
+        onDelete: () {
+          _deleteActivity(activity.id);
+          Navigator.pop(context);
+        },
       ),
     );
   }
 
   _onAuthStateChange(User? user) {
-    setState(() {
-      _user = user;
-    });
+    setState(() => _user = user);
     _retrieveActivities();
   }
 
@@ -266,7 +194,7 @@ class _ListViewState extends State<ListView>
     return _user != null;
   }
 
-  _startNewActivity(BuildContext context, String activityName) async {
+  _startNewActivity(String activityName) async {
     if (_currentActivityId == null) {
       if (FirebaseAuth.instance.currentUser == null) {
         _reportNotLoggedIn();
@@ -277,21 +205,20 @@ class _ListViewState extends State<ListView>
         return;
       }
 
-      var db = FirebaseFirestore.instance;
-      var activityMap = <String, dynamic>{
-        "name": activityName,
-        "isActive": true,
-        "time": DateTime.now().toString(),
-        "userUid": FirebaseAuth.instance.currentUser?.uid
-      };
-      db.collection("activities").add(activityMap);
-      _logNewActivity();
+      _currentActivityId = await ActivityRepo.instance.insert(ActivityModel(
+        name: activityName,
+        time: DateTime.now().toString(),
+        isActive: true,
+      ));
+      await _logNewActivity();
     }
-    _showMapView(context, "");
+    if (mounted) {
+      _showMapView(context, _currentActivityId!);
+    }
     _retrieveActivities();
   }
 
-  _requestNameAndStartNewActivity(BuildContext context) {
+  _requestNameAndStartNewActivity() {
     final activityNameController = TextEditingController();
     showDialog(
       context: context,
@@ -305,7 +232,7 @@ class _ListViewState extends State<ListView>
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _startNewActivity(context, activityNameController.text);
+              _startNewActivity(activityNameController.text);
             },
             child: const Text("Create"),
           )
@@ -324,46 +251,41 @@ class _ListViewState extends State<ListView>
   }
 
   _updateActivity(String activityId, String newName) async {
-    var db = FirebaseFirestore.instance;
-    final ref = db.collection("activities").doc(activityId);
-    await ref.update({"name": newName});
+    ActivityRepo.instance.setName(activityId, newName);
     _retrieveActivities();
   }
 
   _deleteActivity(String activityId) async {
-    var db = FirebaseFirestore.instance;
-    final ref = db.collection("activities").doc(activityId);
-    await ref.delete();
+    ActivityRepo.instance.delete(activityId);
     _retrieveActivities();
   }
 
-  _logNewActivity() {
-    FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  Future<void> _logNewActivity() async {
+    await FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
   }
 
   _showMapView(BuildContext context, String activityId) {
     if (context.mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => MapView(activity: activityId)),
+        MaterialPageRoute(
+            builder: (context) => MapView(activityId: activityId)),
       );
     }
   }
 
   Future<bool> _requestPermissions({required BuildContext context}) async {
-    if (!await _requestLocationPermission(context: context)) {
+    if (!await _requestLocationPermission(context)) {
       return false;
     }
-    if (!context.mounted ||
-        !await _requestNotificationPermission(context: context)) {
+    if (!context.mounted || !await _requestNotificationPermission(context)) {
       return false;
     }
 
     return true;
   }
 
-  Future<bool> _requestLocationPermission(
-      {required BuildContext context}) async {
+  Future<bool> _requestLocationPermission(BuildContext context) async {
     String message;
     Duration duration;
     if (await Permission.locationWhenInUse.shouldShowRequestRationale) {
@@ -399,8 +321,7 @@ class _ListViewState extends State<ListView>
     }
   }
 
-  Future<bool> _requestNotificationPermission(
-      {required BuildContext context}) async {
+  Future<bool> _requestNotificationPermission(BuildContext context) async {
     String message;
     Duration duration;
     if (await Permission.notification.shouldShowRequestRationale) {
@@ -462,18 +383,17 @@ class _ListViewState extends State<ListView>
       );
 
       // Sign in
-      await FirebaseAuth.instance
-          .signInWithCredential(credential)
-          .then((authResult) {
-        final user = authResult.user;
-        if (user != null) {
-          message =
-              "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
-          _logSignedIn();
-        } else {
-          message = "error on sign-in";
-        }
-      });
+      final authResult =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final user = authResult.user;
+      if (user != null) {
+        message =
+            "successfully signed in! user id: ${FirebaseAuth.instance.currentUser?.uid}";
+        _logSignedIn();
+      } else {
+        message = "error on sign-in";
+      }
     }
 
     if (context.mounted) {
@@ -526,58 +446,24 @@ class _ListViewState extends State<ListView>
   }
 
   _saveNewLocation(Location location) async {
-    var db = FirebaseFirestore.instance;
-    var locationMap = <String, dynamic>{
-      "latitude": location.latitude.toString(),
-      "longitude": location.longitude.toString(),
-      "altitude": location.altitude.toString(),
-      "accuracy": location.accuracy.toString(),
-      "bearing": location.bearing.toString(),
-      "speed": location.speed.toString(),
-      "time": DateTime.fromMillisecondsSinceEpoch(location.time!.toInt())
-          .toString(),
-      "userUid": FirebaseAuth.instance.currentUser?.uid,
-      "activityUid": _currentActivityId
-    };
-    db.collection("locations").add(locationMap);
+    await LocationRepo.instance.insert(
+        LocationModel.fromBackgroundLocation(location, _currentActivityId!));
   }
 
   _retrieveActivities() async {
-    if (!_isSignedIn()) {
-      setState(() {
-        _currentActivityId = null;
-        _activities = [];
-      });
-      return;
-    }
+    var activities = _isSignedIn()
+        ? await ActivityRepo.instance.latestN(50)
+        : <ActivityModel>[];
 
-    var db = FirebaseFirestore.instance;
-    var snapshot = await db
-        .collection("activities")
-        .where("userUid",
-            isEqualTo: "${FirebaseAuth.instance.currentUser?.uid}")
-        .orderBy("time", descending: true)
-        .limit(50)
-        .get();
-
-    var activities = snapshot.docs;
     setState(() {
-      _activities = activities.map((activity) {
-        return {
-          "id": activity.id,
-          "name": activity["name"],
-          "time": activity["time"],
-          "isActive": activity["isActive"]
-        };
-      }).toList();
-
+      _activities = activities;
       _currentActivityId =
-          activities.where((activity) => activity["isActive"]).firstOrNull?.id;
+          _activities.where((activity) => activity.isActive).firstOrNull?.id;
     });
 
     if (!mounted) return;
 
-    if (_currentActivityId != null && _currentActivityId != "") {
+    if (_currentActivityId != null) {
       await _startLocationService(context: context);
     } else {
       await _stopLocationService(context: context);
