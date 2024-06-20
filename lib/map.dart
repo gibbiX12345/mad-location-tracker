@@ -120,25 +120,27 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: getAppBar(context),
-      body: Stack(
+      body: Column(
         children: [
-          GoogleMap(
-            mapType: MapType.hybrid,
-            initialCameraPosition: const CameraPosition(
-              target: (LatLng(46.9577191, 7.4556732)),
-              zoom: 10,
+          Expanded(
+            child: GoogleMap(
+              mapType: MapType.hybrid,
+              initialCameraPosition: const CameraPosition(
+                target: (LatLng(46.9577191, 7.4556732)),
+                zoom: 10,
+              ),
+              onMapCreated: (controller) {
+                if (!_controllerCompleter.isCompleted) {
+                  _controllerCompleter.complete(controller);
+                }
+                _controller = controller;
+              },
+              polylines: _polylines,
+              markers: _markers,
+              compassEnabled: true,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
             ),
-            onMapCreated: (controller) {
-              if (!_controllerCompleter.isCompleted) {
-                _controllerCompleter.complete(controller);
-              }
-              _controller = controller;
-            },
-            polylines: _polylines,
-            markers: _markers,
-            compassEnabled: true,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
           ),
           Align(
             alignment: Alignment.bottomCenter,
