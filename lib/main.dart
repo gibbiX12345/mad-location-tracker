@@ -210,7 +210,7 @@ class _ListViewState extends State<ListView>
         isActive: true,
       ));
       _currentActivity = await ActivityRepo.instance.currentlyActive();
-      await _logNewActivity();
+      _logNewActivity();
     }
     if (mounted) {
       _showMapView(context, _currentActivity!);
@@ -253,15 +253,25 @@ class _ListViewState extends State<ListView>
   _updateActivity(String activityId, String newName) async {
     ActivityRepo.instance.setName(activityId, newName);
     _retrieveActivities();
+    _logRenameActivity();
+  }
+
+  _logRenameActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'activity_renamed');
   }
 
   _deleteActivity(String activityId) async {
     ActivityRepo.instance.delete(activityId);
     _retrieveActivities();
+    _logDeleteActivity();
   }
 
-  Future<void> _logNewActivity() async {
-    await FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  _logDeleteActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'activity_deleted');
+  }
+
+  _logNewActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
   }
 
   _showMapView(BuildContext context, ActivityModel activity) {
