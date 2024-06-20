@@ -37,8 +37,10 @@ class ActivityRepo {
     return ref.id;
   }
 
-  Future<void> setActive(String id, bool active) async {
-    await _collection.doc(id).update({"isActive": false});
+  Future<void> finishActivity(String id) async {
+    await _collection
+        .doc(id)
+        .update({"endTime": DateTime.now().toString(), "isActive": false});
   }
 
   Future<void> setName(String id, String name) async {

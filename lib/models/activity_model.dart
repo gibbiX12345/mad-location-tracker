@@ -4,12 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 class ActivityModel {
   String id;
   String name;
-  String time;
+  String startTime;
+  String endTime = "";
   String userUid;
   bool isActive;
 
   ActivityModel(
-      {required this.name,
+      required this.startTime,
       required this.time,
       required this.isActive,
       FirebaseAuth? auth})
@@ -19,7 +20,8 @@ class ActivityModel {
   ActivityModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc)
       : id = doc.id,
         name = doc["name"],
-        time = doc["time"],
+        startTime = doc["startTime"],
+        endTime = doc["endTime"],
         userUid = doc["userUid"],
         isActive = doc["isActive"];
 

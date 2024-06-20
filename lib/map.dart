@@ -202,7 +202,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   _finishActivityStuff() async {
     var currentActivity = await _getCurrentActivity();
     if (currentActivity != null) {
-      await ActivityRepo.instance.setActive(currentActivity, false);
+      await ActivityRepo.instance.finishActivity(currentActivity);
       _logFinishedActivity();
     }
     if (mounted) {
