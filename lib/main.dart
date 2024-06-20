@@ -7,6 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_config/flutter_config.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/date_symbol_data_file.dart';
+import 'package:intl/intl.dart';
 import 'package:mad_location_tracker/app_bar.dart';
 import 'package:mad_location_tracker/firebase_options.dart';
 import 'package:mad_location_tracker/map.dart';
