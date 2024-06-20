@@ -16,7 +16,7 @@ class ActivityRepo {
   Future<List<ActivityModel>> latestN(int n) async {
     var snapshot = await _collection
         .where("userUid", isEqualTo: "${_auth.currentUser?.uid}")
-        .orderBy("time", descending: true)
+        .orderBy("startTime", descending: true)
         .limit(n)
         .get();
 

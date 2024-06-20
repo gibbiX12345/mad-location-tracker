@@ -59,5 +59,5 @@ class ActivityList extends StatelessWidget {
   String _formatTitle(ActivityModel activity) =>
       activity.name + (activity.isActive ? " (active)" : "");
 
-  String _formatSubtitle(ActivityModel activity) => activity.time.toString();
+  String _formatSubtitle(ActivityModel activity) => activity.startTime.toString();
 }
