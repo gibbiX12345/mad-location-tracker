@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:mad_location_tracker/models/activity_model.dart';
 
 class ActivityList extends StatelessWidget {
@@ -59,5 +60,5 @@ class ActivityList extends StatelessWidget {
   String _formatTitle(ActivityModel activity) =>
       activity.name + (activity.isActive ? " (active)" : "");
 
-  String _formatSubtitle(ActivityModel activity) => activity.time.toString();
+  String _formatSubtitle(ActivityModel activity) => DateFormat.yMd().add_Hms().format(DateTime.parse(activity.startTime));
 }

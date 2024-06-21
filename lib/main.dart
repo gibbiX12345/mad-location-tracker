@@ -7,6 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_config/flutter_config.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/date_symbol_data_file.dart';
+import 'package:intl/intl.dart';
 import 'package:mad_location_tracker/app_bar.dart';
 import 'package:mad_location_tracker/firebase_options.dart';
 import 'package:mad_location_tracker/map.dart';
@@ -61,7 +63,7 @@ class _ListViewState extends State<ListView>
     with WidgetsBindingObserver, RouteAware {
   late StreamSubscription<User?> _authStateSubscription;
   User? _user;
-  String? _currentActivityId;
+  ActivityModel? _currentActivity;
 
   var _activities = <ActivityModel>[];
 
@@ -128,7 +130,7 @@ class _ListViewState extends State<ListView>
             Expanded(
               child: ActivityList(
                 padding: const EdgeInsets.only(bottom: 80),
-                onOpen: (activity) => _showMapView(context, activity.id),
+                onOpen: (activity) => _showMapView(context, activity),
                 onRename: (activity) => _showRenameActivityDialog(activity),
                 onDelete: (activity) => _showDeleteActivityDialog(activity),
                 activities: _activities,
@@ -143,11 +145,11 @@ class _ListViewState extends State<ListView>
 
   FloatingActionButton _buildFloatingActionButton(BuildContext context) {
     return FloatingActionButton.extended(
-      onPressed: () => _currentActivityId == null
+      onPressed: () => _currentActivity == null
           ? _requestNameAndStartNewActivity()
-          : _showMapView(context, _currentActivityId!),
+          : _showMapView(context, _currentActivity!),
       tooltip: 'Add a new activity',
-      label: _currentActivityId == null
+      label: _currentActivity == null
           ? const Row(children: [Icon(Icons.add), Text('Activity')])
           : const Text('Resume Activity'),
     );
@@ -195,7 +197,7 @@ class _ListViewState extends State<ListView>
   }
 
   _startNewActivity(String activityName) async {
-    if (_currentActivityId == null) {
+    if (_currentActivity == null) {
       if (FirebaseAuth.instance.currentUser == null) {
         _reportNotLoggedIn();
         return;
@@ -204,16 +206,16 @@ class _ListViewState extends State<ListView>
       if (!await _requestPermissions(context: context)) {
         return;
       }
-
-      _currentActivityId = await ActivityRepo.instance.insert(ActivityModel(
+      await ActivityRepo.instance.insert(ActivityModel(
         name: activityName,
-        time: DateTime.now().toString(),
+        startTime: DateTime.now().toString(),
         isActive: true,
       ));
-      await _logNewActivity();
+      _currentActivity = await ActivityRepo.instance.currentlyActive();
+      _logNewActivity();
     }
     if (mounted) {
-      _showMapView(context, _currentActivityId!);
+      _showMapView(context, _currentActivity!);
     }
     _retrieveActivities();
   }
@@ -253,23 +255,32 @@ class _ListViewState extends State<ListView>
   _updateActivity(String activityId, String newName) async {
     ActivityRepo.instance.setName(activityId, newName);
     _retrieveActivities();
+    _logRenameActivity();
+  }
+
+  _logRenameActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'activity_renamed');
   }
 
   _deleteActivity(String activityId) async {
     ActivityRepo.instance.delete(activityId);
     _retrieveActivities();
+    _logDeleteActivity();
   }
 
-  Future<void> _logNewActivity() async {
-    await FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  _logDeleteActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'activity_deleted');
   }
 
-  _showMapView(BuildContext context, String activityId) {
+  _logNewActivity() {
+    FirebaseAnalytics.instance.logEvent(name: 'new_activity_created');
+  }
+
+  _showMapView(BuildContext context, ActivityModel activity) {
     if (context.mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(
-            builder: (context) => MapView(activityId: activityId)),
+        MaterialPageRoute(builder: (context) => MapView(activity: activity)),
       );
     }
   }
@@ -446,8 +457,10 @@ class _ListViewState extends State<ListView>
   }
 
   _saveNewLocation(Location location) async {
-    await LocationRepo.instance.insert(
-        LocationModel.fromBackgroundLocation(location, _currentActivityId!));
+    if (_currentActivity != null) {
+      await LocationRepo.instance.insert(
+          LocationModel.fromBackgroundLocation(location, _currentActivity!.id));
+    }
   }
 
   _retrieveActivities() async {
@@ -457,13 +470,13 @@ class _ListViewState extends State<ListView>
 
     setState(() {
       _activities = activities;
-      _currentActivityId =
-          _activities.where((activity) => activity.isActive).firstOrNull?.id;
+      _currentActivity =
+          _activities.where((activity) => activity.isActive).firstOrNull;
     });
 
     if (!mounted) return;
 
-    if (_currentActivityId != null) {
+    if (_currentActivity != null) {
       await _startLocationService(context: context);
     } else {
       await _stopLocationService(context: context);

@@ -16,7 +16,7 @@ class ActivityRepo {
   Future<List<ActivityModel>> latestN(int n) async {
     var snapshot = await _collection
         .where("userUid", isEqualTo: "${_auth.currentUser?.uid}")
-        .orderBy("time", descending: true)
+        .orderBy("startTime", descending: true)
         .limit(n)
         .get();
 
@@ -32,13 +32,23 @@ class ActivityRepo {
     return snapshot.docs.firstOrNull?.id;
   }
 
-  Future<String> insert(ActivityModel activityModel) async {
-    var ref = await _collection.add(activityModel.data());
-    return ref.id;
+  Future<ActivityModel?> currentlyActive() async {
+    var snapshot = await _collection
+        .where("userUid", isEqualTo: "${_auth.currentUser?.uid}")
+        .where("isActive", isEqualTo: true)
+        .limit(1)
+        .get();
+    return ActivityModel.fromDoc(snapshot.docs.first);
   }
 
-  Future<void> setActive(String id, bool active) async {
-    await _collection.doc(id).update({"isActive": false});
+  Future<void> insert(ActivityModel activityModel) async {
+    await _collection.add(activityModel.data());
+  }
+
+  Future<void> finishActivity(String id) async {
+    await _collection
+        .doc(id)
+        .update({"endTime": DateTime.now().toString(), "isActive": false});
   }
 
   Future<void> setName(String id, String name) async {

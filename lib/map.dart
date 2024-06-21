@@ -4,25 +4,27 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mad_location_tracker/app_bar.dart';
+import 'package:mad_location_tracker/models/activity_model.dart';
 import 'package:mad_location_tracker/models/location_model.dart';
 import 'package:mad_location_tracker/repos/activity_repo.dart';
 import 'package:mad_location_tracker/repos/location_repo.dart';
+import 'package:mad_location_tracker/widgets/activity_context.dart';
 
 class MapView extends StatelessWidget {
-  const MapView({super.key, required this.activityId});
+  const MapView({super.key, required this.activity});
 
-  final String activityId;
+  final ActivityModel activity;
 
   @override
   Widget build(BuildContext context) {
-    return MapSample(activityId: activityId);
+    return MapSample(activity: activity);
   }
 }
 
 class MapSample extends StatefulWidget {
-  const MapSample({super.key, required this.activityId});
+  const MapSample({super.key, required this.activity});
 
-  final String activityId;
+  final ActivityModel activity;
 
   @override
   State<MapSample> createState() => MapSampleState();
@@ -46,7 +48,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
 
   StreamSubscription<dynamic> _subscribeToLocations() =>
       LocationRepo.instance.listenByActivityId(
-          widget.activityId, (locations) => _onUpdateLocations(locations));
+          widget.activity.id, (locations) => _onUpdateLocations(locations));
 
   Future<void> _onUpdateLocations(List<LocationModel> locations) async {
     var lineColor = Theme.of(context).colorScheme.inversePrimary;
@@ -118,35 +120,31 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: getAppBar(context),
-      body: Stack(
+      body: Column(
         children: [
-          GoogleMap(
-            mapType: MapType.hybrid,
-            initialCameraPosition: const CameraPosition(
-              target: (LatLng(46.9577191, 7.4556732)),
-              zoom: 10,
+          Expanded(
+            child: GoogleMap(
+              mapType: MapType.hybrid,
+              initialCameraPosition: const CameraPosition(
+                target: (LatLng(46.9577191, 7.4556732)),
+                zoom: 10,
+              ),
+              onMapCreated: (controller) {
+                if (!_controllerCompleter.isCompleted) {
+                  _controllerCompleter.complete(controller);
+                }
+                _controller = controller;
+              },
+              polylines: _polylines,
+              markers: _markers,
+              compassEnabled: true,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
             ),
-            onMapCreated: (controller) {
-              if (!_controllerCompleter.isCompleted) {
-                _controllerCompleter.complete(controller);
-              }
-              _controller = controller;
-            },
-            polylines: _polylines,
-            markers: _markers,
-            compassEnabled: true,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
           ),
           Align(
             alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: ElevatedButton(
-                onPressed: () => _finishActivity(),
-                child: const Text("Finish Activity"),
-              ),
-            ),
+            child: ActivityContext(onFinish: () => _finishActivity(), activity: widget.activity),
           ),
         ],
       ),
@@ -184,7 +182,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   }
 
   Future<List<LocationModel>> _getLocations() async {
-    var currentActivity = widget.activityId ?? await _getCurrentActivity();
+    var currentActivity = widget.activity.id ?? await _getCurrentActivity();
     if (currentActivity == null) {
       return [];
     }
@@ -202,7 +200,7 @@ class MapSampleState extends State<MapSample> with WidgetsBindingObserver {
   _finishActivityStuff() async {
     var currentActivity = await _getCurrentActivity();
     if (currentActivity != null) {
-      await ActivityRepo.instance.setActive(currentActivity, false);
+      await ActivityRepo.instance.finishActivity(currentActivity);
       _logFinishedActivity();
     }
     if (mounted) {
